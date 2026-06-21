@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Exposes the app's cache "exports" subfolder to the FileProvider so backup
+     JSON files can be shared via the system share sheet without broad storage access. -->
+<paths>
+    <cache-path name="exports" path="exports/" />
+</paths>
