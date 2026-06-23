@@ -5,14 +5,14 @@ plugins {
 
 android {
     namespace = "com.aldrenstudios.selfreign"
-    compileSdk = 34
+    compileSdk = 35
 
     defaultConfig {
         applicationId = "com.aldrenstudios.selfreign"
         minSdk = 24
-        targetSdk = 34
-        versionCode = 1
-        versionName = "1.0"
+        targetSdk = 35
+        versionCode = 2
+        versionName = "1.0.1"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         vectorDrawables {
@@ -86,7 +86,7 @@ dependencies {
     implementation("androidx.security:security-crypto:1.1.0-alpha06")
 
     // MediaSession + foreground service support for background ambient audio
-    implementation("androidx.media:media:1.7.0")
+    // (removed: the app ships no audio assets)
 
     // Biometric / device-credential app lock
     implementation("androidx.biometric:biometric:1.1.0")

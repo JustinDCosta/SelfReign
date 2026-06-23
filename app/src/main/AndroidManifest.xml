@@ -8,10 +8,6 @@
     <!-- Subtle haptic feedback on meaningful interactions -->
     <uses-permission android:name="android.permission.VIBRATE" />
 
-    <!-- Foreground service so ambient music keeps playing when the app is minimised -->
-    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
-    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MEDIA_PLAYBACK" />
-
     <application
         android:name=".HabitApp"
         android:allowBackup="false"
@@ -28,18 +24,13 @@
             android:name=".MainActivity"
             android:exported="true"
             android:label="@string/app_name"
+            android:screenOrientation="portrait"
             android:theme="@style/Theme.SelfReign">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
         </activity>
-
-        <!-- Plays ambient background music as a media-style foreground service -->
-        <service
-            android:name=".audio.AmbientAudioService"
-            android:exported="false"
-            android:foregroundServiceType="mediaPlayback" />
 
         <!-- Lets the backup utility share an exported JSON file via the system share sheet -->
         <provider
