@@ -1,6 +1,7 @@
 package com.aldrenstudios.selfreign.ui.panic
 
-import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.Animatable
+import androidx.compose.animation.core.LinearEasing
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
@@ -38,13 +39,18 @@ import com.aldrenstudios.selfreign.R
 import com.aldrenstudios.selfreign.ui.theme.Accent
 import com.aldrenstudios.selfreign.ui.theme.OceanBlue
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 
 /** The three phases of a box-breathing-style cycle, each with a duration. */
-private enum class BreathPhase(val labelRes: Int, val seconds: Int, val targetScale: Float) {
-    INHALE(R.string.panic_breathe_in, 4, 1f),
-    HOLD(R.string.panic_hold, 4, 1f),
-    EXHALE(R.string.panic_breathe_out, 4, 0.55f)
+private enum class BreathPhase(val labelRes: Int, val seconds: Int) {
+    INHALE(R.string.panic_breathe_in, 4),
+    HOLD(R.string.panic_hold, 4),
+    EXHALE(R.string.panic_breathe_out, 4)
 }
+
+// Circle scale at the fully-exhaled (small) and fully-inhaled (large) extremes.
+private const val EXHALE_SCALE = 0.55f
+private const val INHALE_SCALE = 1f
 
 /**
  * Urge-surfing helper: a guided breathing exercise shown when the user taps the
@@ -94,38 +100,42 @@ fun PanicSheet(onDismiss: () -> Unit) {
 }
 
 /**
- * Drives the breath phase state machine: each phase holds for its duration while a
- * 1 Hz countdown ticks down, then advances to the next phase. The circle scale is
- * animated to the phase's target over the phase duration so motion matches the timer.
+ * Drives the breath phase state machine. The circle starts fully exhaled (small)
+ * so the very first inhale visibly expands it. Each phase animates the scale to its
+ * target over the phase duration while a 1 Hz countdown ticks in parallel, then it
+ * advances: inhale -> hold -> exhale, looping.
  */
 @Composable
 private fun BreathingGuide() {
+    val scale = remember { Animatable(EXHALE_SCALE) }
     var phase by remember { mutableStateOf(BreathPhase.INHALE) }
     var remaining by remember { mutableIntStateOf(BreathPhase.INHALE.seconds) }
 
-    // Phase progression + per-second countdown.
-    LaunchedEffect(phase) {
-        remaining = phase.seconds
-        while (remaining > 0) {
-            delay(1000)
-            remaining--
-        }
-        phase = when (phase) {
-            BreathPhase.INHALE -> BreathPhase.HOLD
-            BreathPhase.HOLD -> BreathPhase.EXHALE
-            BreathPhase.EXHALE -> BreathPhase.INHALE
+    LaunchedEffect(Unit) {
+        scale.snapTo(EXHALE_SCALE)
+        while (true) {
+            for (p in BreathPhase.entries) {
+                phase = p
+                remaining = p.seconds
+                // Count the seconds down in parallel with the scale animation.
+                val ticker = launch {
+                    while (remaining > 1) {
+                        delay(1000)
+                        remaining--
+                    }
+                }
+                when (p) {
+                    BreathPhase.INHALE ->
+                        scale.animateTo(INHALE_SCALE, tween(p.seconds * 1000, easing = LinearEasing))
+                    BreathPhase.HOLD ->
+                        delay(p.seconds * 1000L)
+                    BreathPhase.EXHALE ->
+                        scale.animateTo(EXHALE_SCALE, tween(p.seconds * 1000, easing = LinearEasing))
+                }
+                ticker.cancel()
+            }
         }
     }
-
-    // Animate the circle toward the current phase's target scale over its duration.
-    // HOLD keeps the inhaled size, so it animates from/at 1f (instant) and just waits.
-    val scale by animateFloatAsState(
-        targetValue = phase.targetScale,
-        animationSpec = tween(
-            durationMillis = if (phase == BreathPhase.HOLD) 0 else phase.seconds * 1000
-        ),
-        label = "breathScale"
-    )
 
     Box(
         modifier = Modifier.size(260.dp),
@@ -134,7 +144,7 @@ private fun BreathingGuide() {
         Box(
             modifier = Modifier
                 .size(240.dp)
-                .scale(scale)
+                .scale(scale.value)
                 .clip(CircleShape)
                 .background(
                     Brush.radialGradient(
