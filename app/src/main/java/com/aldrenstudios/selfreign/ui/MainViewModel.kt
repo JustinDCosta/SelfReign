@@ -5,17 +5,19 @@ import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
 import com.aldrenstudios.selfreign.HabitApp
-import com.aldrenstudios.selfreign.audio.AmbientAudioService
 import com.aldrenstudios.selfreign.audio.FeedbackEvent
 import com.aldrenstudios.selfreign.data.BackupManager
 import com.aldrenstudios.selfreign.data.RecoveryState
 import com.aldrenstudios.selfreign.data.RelapseResult
-import com.aldrenstudios.selfreign.data.StoreCatalog
 import com.aldrenstudios.selfreign.widget.WidgetUpdater
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 
 /**
@@ -36,6 +38,27 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     /** A clock that ticks every second so durations and progress animate live. */
     private val _now = MutableStateFlow(System.currentTimeMillis())
     val now: StateFlow<Long> = _now.asStateFlow()
+
+    /**
+     * Slowly-changing derived values. These recompute on every tick internally but
+     * only emit to collectors when the value actually changes, so screens that show
+     * the level / unlock state do NOT recompose every second (only the live clock
+     * subtree does). This is the key to a smooth, snappy UI.
+     */
+    val effectiveLevel: StateFlow<Int> =
+        combine(state, now) { s, t -> s.effectiveLevel(t) }
+            .distinctUntilChanged()
+            .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), state.value.effectiveLevel(_now.value))
+
+    val organicLevel: StateFlow<Int> =
+        combine(state, now) { s, t -> s.organicLevel(t) }
+            .distinctUntilChanged()
+            .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), state.value.organicLevel(_now.value))
+
+    val graceShielding: StateFlow<Boolean> =
+        combine(state, now) { s, t -> s.isGraceShielding(t) }
+            .distinctUntilChanged()
+            .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), state.value.isGraceShielding(_now.value))
 
     /** One-shot relapse outcome to surface in a dialog; cleared once shown. */
     private val _relapseResult = MutableStateFlow<RelapseResult?>(null)
@@ -71,7 +94,6 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
             }
         }
         state.value.let {
-            feedback.setSoundsEnabled(it.soundsEnabled)
             feedback.setHapticsEnabled(it.hapticsEnabled)
         }
     }
@@ -80,7 +102,6 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     fun unlock() { _unlocked.value = true }
     fun lock() { if (state.value.appLockEnabled) _unlocked.value = false }
     fun verifyPin(pin: String): Boolean = recovery.verifyPin(pin).also { if (it) unlock() }
-    fun isLockEnabled(): Boolean = state.value.appLockEnabled
     fun hasPin(): Boolean = recovery.hasPin()
 
     /** Sets/changes the unlock PIN (turns the lock on). */
@@ -125,22 +146,6 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         recovery.selectWallpaper(id)
     }
 
-    fun selectMusic(id: String?) {
-        feedback.play(FeedbackEvent.CLICK)
-        recovery.selectMusic(id)
-        syncAudio()
-    }
-
-    fun setMusicEnabled(enabled: Boolean) {
-        recovery.setMusicEnabled(enabled)
-        syncAudio()
-    }
-
-    fun setSoundsEnabled(enabled: Boolean) {
-        recovery.setSoundsEnabled(enabled)
-        feedback.setSoundsEnabled(enabled)
-    }
-
     fun setHapticsEnabled(enabled: Boolean) {
         recovery.setHapticsEnabled(enabled)
         feedback.setHapticsEnabled(enabled)
@@ -150,17 +155,6 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     fun setLevelThresholds(thresholds: List<Int>) = recovery.setLevelThresholds(thresholds)
     fun resetLevelThresholds() = recovery.resetLevelThresholds()
     fun setCostPerDay(cents: Int, currency: String) = recovery.setCostPerDay(cents, currency)
-
-    private fun syncAudio() {
-        val s = state.value
-        val item = s.selectedMusicId?.let { StoreCatalog.byId(it) }
-        val unlocked = item != null && s.isUnlocked(item, System.currentTimeMillis())
-        if (s.musicEnabled && item?.rawResName != null && unlocked) {
-            AmbientAudioService.play(application, item.rawResName)
-        } else {
-            AmbientAudioService.stop(application)
-        }
-    }
 
     // --- Backup ---
     fun exportJson(): String = BackupManager.export(recovery.snapshot())
@@ -179,11 +173,9 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                     pinHash = current.pinHash
                 )
                 recovery.overwrite(merged)
-                feedback.setSoundsEnabled(merged.soundsEnabled)
                 feedback.setHapticsEnabled(merged.hapticsEnabled)
                 lastSeenLevel = merged.effectiveLevel(System.currentTimeMillis())
                 _unlocked.value = !merged.appLockEnabled
-                syncAudio()
                 WidgetUpdater.requestUpdate(application)
                 null
             }

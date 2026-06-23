@@ -10,11 +10,19 @@ import androidx.compose.ui.graphics.Color
  *
  * Every wallpaper anchors on true AMOLED black so battery savings and the calm,
  * minimalist aesthetic are preserved; the accent only blooms subtly from one corner.
+ *
+ * Brushes are immutable and stateless, so we build each one once and cache it. This
+ * avoids reallocating gradients on every recomposition (e.g. the full-screen
+ * background and the store previews).
  */
 object Wallpapers {
 
-    /** Returns the Compose [Brush] for a given store wallpaper id. */
-    fun brushFor(id: String): Brush = when (id) {
+    private val cache = HashMap<String, Brush>()
+
+    /** Returns the (cached) Compose [Brush] for a given store wallpaper id. */
+    fun brushFor(id: String): Brush = cache.getOrPut(id) { build(id) }
+
+    private fun build(id: String): Brush = when (id) {
         "wp_sage" -> radialFromCorner(Color(0xFF0E1A14), Accent)
         "wp_ocean" -> radialFromCorner(Color(0xFF0A1622), OceanBlue)
         "wp_lavender" -> radialFromCorner(Color(0xFF150F1E), Lavender)
