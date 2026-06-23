@@ -9,7 +9,21 @@
 .cxx
 local.properties
 app/build/
+
+# Signing & secrets — NEVER commit these
 *.keystore
 !debug.keystore
 *.jks
+keystore.properties
 google-services.json
+
+# Release build artifacts (generated; do not version)
+app/release/
+app/debug/
+*.aab
+*.apk
+*.aab.idsig
+*.apk.idsig
+# R8/ProGuard mapping & native symbols
+mapping.txt
+native-debug-symbols.zip
