@@ -55,4 +55,4 @@ If this policy changes, the updated version will be posted here with a new "last
 updated" date.
 
 ## Contact
-Questions? Reach us at: **[replace with your support email]**
+Questions? Reach us at: **aldrenstudios@gmail.com**
