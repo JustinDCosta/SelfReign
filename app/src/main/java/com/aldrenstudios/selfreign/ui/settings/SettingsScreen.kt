@@ -1,27 +1,36 @@
 package com.aldrenstudios.selfreign.ui.settings
 
+import android.content.Intent
+import android.net.Uri
 import android.os.Build
 import android.widget.Toast
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.selection.selectable
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.OpenInNew
+import androidx.compose.material.icons.rounded.Coffee
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
-import androidx.compose.material3.RadioButton
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -32,24 +41,30 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.aldrenstudios.selfreign.R
-import com.aldrenstudios.selfreign.data.FontSizeOption
 import com.aldrenstudios.selfreign.ui.MainViewModel
+import com.aldrenstudios.selfreign.ui.theme.Accent
 import com.aldrenstudios.selfreign.util.BackupIo
 
 /**
- * Settings: font size, feedback (sounds/haptics), background music, reminders,
- * encrypted backup export/import, and a privacy statement.
- *
- * Uses two ViewModels: [SettingsViewModel] for the lightweight DataStore prefs
- * (font, reminders) and the shared [MainViewModel] for recovery-state-backed
- * toggles (feedback, music) and the backup bridge.
+ * Donation link. Replace with your own Buy Me a Coffee / Ko-fi URL. Opened in the
+ * user's browser via ACTION_VIEW — no INTERNET permission needed, since the browser
+ * does the networking and the app itself stays network-free.
+ */
+private const val DONATION_URL = "https://ko-fi.com/aldrenstudios"
+
+/**
+ * Settings: feedback (haptics), reminders, encrypted backup export/import, custom
+ * milestones, money tracking, security/app-lock, an optional support link, and a
+ * privacy statement.
  */
 @Composable
 fun SettingsScreen(
@@ -107,33 +122,12 @@ fun SettingsScreen(
             fontWeight = androidx.compose.ui.text.font.FontWeight.Bold
         )
 
-        // --- Font size ---
-        SettingsSection(title = stringResource(R.string.settings_font_size)) {
-            FontSizeOption.values().forEach { option ->
-                RadioRow(
-                    label = option.displayName(),
-                    selected = settings.fontSize == option,
-                    onClick = { settingsViewModel.setFontSize(option) }
-                )
-            }
-        }
-
-        // --- Feedback (sounds + haptics) ---
+        // --- Feedback (haptics) ---
         SettingsSection(title = stringResource(R.string.settings_feedback)) {
-            ToggleRow(
-                label = stringResource(R.string.settings_sounds),
-                checked = recovery.soundsEnabled,
-                onCheckedChange = { mainViewModel.setSoundsEnabled(it) }
-            )
             ToggleRow(
                 label = stringResource(R.string.settings_haptics),
                 checked = recovery.hapticsEnabled,
                 onCheckedChange = { mainViewModel.setHapticsEnabled(it) }
-            )
-            ToggleRow(
-                label = stringResource(R.string.settings_music),
-                checked = recovery.musicEnabled,
-                onCheckedChange = { mainViewModel.setMusicEnabled(it) }
             )
         }
 
@@ -143,10 +137,16 @@ fun SettingsScreen(
                 label = stringResource(R.string.settings_reminders),
                 checked = settings.remindersEnabled,
                 onCheckedChange = { enabled ->
-                    if (enabled && Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-                        permissionLauncher.launch(android.Manifest.permission.POST_NOTIFICATIONS)
-                    }
+                    // Persist + (re)schedule the job (fully guarded inside the VM).
                     settingsViewModel.setReminders(enabled)
+                    // On Android 13+ ask for notification permission. Wrap the launch:
+                    // on rare devices the system permission UI may be unavailable, and
+                    // an unguarded launch would otherwise crash the app.
+                    if (enabled && Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                        runCatching {
+                            permissionLauncher.launch(android.Manifest.permission.POST_NOTIFICATIONS)
+                        }
+                    }
                 }
             )
         }
@@ -201,6 +201,9 @@ fun SettingsScreen(
                 onBiometricChange = { mainViewModel.setBiometricEnabled(it) }
             )
         }
+
+        // --- Support (gentle, optional donation) ---
+        SupportCard()
 
         // --- Privacy ---
         SettingsSection(title = stringResource(R.string.settings_privacy)) {
@@ -401,6 +404,62 @@ private fun SecurityEditor(
 }
 
 @Composable
+private fun SupportCard() {
+    val context = LocalContext.current
+    Surface(
+        onClick = {
+            // Hand the link to the user's browser; toast if there's nothing to open it.
+            val opened = runCatching {
+                context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(DONATION_URL)))
+            }.isSuccess
+            if (!opened) {
+                Toast.makeText(context, context.getString(R.string.support_open_failed), Toast.LENGTH_SHORT).show()
+            }
+        },
+        shape = RoundedCornerShape(16.dp),
+        color = Accent.copy(alpha = 0.10f),
+        modifier = Modifier.fillMaxWidth()
+    ) {
+        Row(
+            modifier = Modifier.padding(16.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Box(
+                modifier = Modifier
+                    .size(40.dp)
+                    .clip(RoundedCornerShape(12.dp))
+                    .background(Accent.copy(alpha = 0.16f)),
+                contentAlignment = Alignment.Center
+            ) {
+                Icon(Icons.Rounded.Coffee, contentDescription = null, tint = Accent, modifier = Modifier.size(22.dp))
+            }
+            Spacer(Modifier.width(14.dp))
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    text = stringResource(R.string.support_cta),
+                    style = MaterialTheme.typography.titleSmall,
+                    color = MaterialTheme.colorScheme.onSurface,
+                    fontWeight = FontWeight.SemiBold
+                )
+                Spacer(Modifier.size(2.dp))
+                Text(
+                    text = stringResource(R.string.support_message),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+            Spacer(Modifier.width(10.dp))
+            Icon(
+                Icons.AutoMirrored.Filled.OpenInNew,
+                contentDescription = null,
+                tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.size(18.dp)
+            )
+        }
+    }
+}
+
+@Composable
 private fun SettingsSection(title: String, content: @Composable () -> Unit) {
     Card(
         modifier = Modifier.fillMaxWidth(),
@@ -435,28 +494,4 @@ private fun ToggleRow(label: String, checked: Boolean, onCheckedChange: (Boolean
         )
         Switch(checked = checked, onCheckedChange = onCheckedChange)
     }
-}
-
-@Composable
-private fun RadioRow(label: String, selected: Boolean, onClick: () -> Unit) {
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .selectable(selected = selected, onClick = onClick)
-            .padding(vertical = 8.dp),
-        verticalAlignment = Alignment.CenterVertically
-    ) {
-        RadioButton(selected = selected, onClick = onClick)
-        Text(
-            text = label,
-            style = MaterialTheme.typography.bodyLarge,
-            modifier = Modifier.padding(start = 8.dp)
-        )
-    }
-}
-
-private fun FontSizeOption.displayName(): String = when (this) {
-    FontSizeOption.SMALL -> "Small"
-    FontSizeOption.MEDIUM -> "Medium"
-    FontSizeOption.LARGE -> "Large"
 }
