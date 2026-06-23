@@ -1,128 +1,111 @@
-# SelfReign — Reclaim Life & Habits
+# SelfReign
 
-A minimalist, AMOLED-first Android app that helps people **quit or reduce a bad habit**
-by tracking clean time, turning it into **levels and unlockable rewards**, and softening
-slips with a fair **forgiveness + grace-period** system.
-
-Built with **Kotlin + Jetpack Compose + Material 3**, fully **offline**, with
-**encrypted** on-device storage.
-
-- **App ID:** `com.aldrenstudios.selfreign`
-- **Publisher:** Aldren Studios
+**Reclaim life & habits.** SelfReign is a calm, fully-offline Android app that helps
+you quit a bad habit by tracking your clean time, turning progress into levels and
+rewards, and supporting you through cravings and slips — all on-device and private.
 
 ---
 
-## Core Concept
+## Highlights
 
-Time clean becomes **progress**. The longer you stay on track, the higher your **Level**,
-and each level unlocks calming **wallpapers** and **ambient music** in the **Store**.
-Relapses are handled with compassion but clear rules (see the Rulebook screen):
+- **Live clean-time timer** — a hero progress ring counts days/hours/minutes/seconds
+  since your last reset and fills toward the next milestone.
+- **Levels & milestones** — six poetic levels (Beginning → Transformed) with
+  **customizable day thresholds**.
+- **Compassionate relapse model**
+  - Your **first** relapse is always forgiven — nothing is lost.
+  - After that, a **grace period** keeps your earned rewards temporarily unlocked
+    while you climb back; reach the level again before the timer ends to keep them.
+  - Relapsing again during grace (or letting it expire) hard-locks those rewards.
+- **Relapse log** with an optional note and a trigger tag (Stress, Boredom, Social…),
+  shown on a dedicated **History** page.
+- **Insights** — total relapses, best streak, money reclaimed, and a trigger breakdown.
+- **Money reclaimed** — optionally estimate your daily spend and watch the savings add up.
+- **Wallpaper store** — unlock calm, code-drawn gradient backgrounds as you level up.
+- **Urge surfing** — a guided box-breathing exercise for "I'm craving" moments.
+- **Daily encouragement** — an opt-in daily reminder notification.
+- **Home-screen widget** — current streak + level (Glance).
+- **App lock** — optional PIN with optional biometric unlock.
+- **Encrypted backup** — export/import your data as a JSON file you control.
+- **Level-up celebrations** and gentle, opt-in haptics.
 
-1. **First slip is always forgiven** — nothing is lost, one time only.
-2. **Grace period** — after that, a relapse opens a timer equal to the time it took to
-   reach your current level. Your rewards stay unlocked while you climb back.
-3. **Hard lock** — relapse again during grace, or let the timer expire before regaining
-   your level, and those rewards lock until you earn the days back.
+## Privacy first
 
----
-
-## Features
-
-| Area | What it does |
-|---|---|
-| Dashboard | Live clean-time clock, current level, progress bar to next level, grace banner, guarded relapse button |
-| Levels | Milestones at Day 1/3/7/14/30 drive level-ups |
-| Store | Unlockable gradient wallpapers + ambient music, with apply toggles and unlock requirements |
-| Rulebook | Clear, scrollable explanation of all mechanics |
-| Onboarding | Fade-in "Welcome" + CTA, then a 3-step animated walkthrough |
-| Relapse engine | Deterministic forgiveness / grace / hard-lock state machine |
-| Feedback | Subtle haptics + optional UI sounds, toggleable |
-| Background audio | Ambient music via a media foreground service (plays while minimised) |
-| Backup & restore | Export/import an encrypted-at-rest JSON state file via the system file picker, with defensive validation |
-| Security | Recovery state stored in `EncryptedSharedPreferences` (AES-256); no network, no backup off-device |
-
----
-
-## Tech Stack
-
-- **Language:** Kotlin (JVM 17)
-- **UI:** Jetpack Compose, Material 3, Navigation-Compose, Compose Animation
-- **State:** ViewModel + StateFlow (a pure, testable relapse state machine)
-- **Secure storage:** Jetpack Security `EncryptedSharedPreferences`
-- **Prefs:** DataStore (font size, reminder toggle)
-- **Audio:** `MediaPlayer` + `MediaSessionCompat` in a `mediaPlayback` foreground service
-- **Background work:** WorkManager (daily reminder)
-- **Min / Target SDK:** 24 / 34
+- **100% offline** — there is no `INTERNET` permission; nothing ever leaves the device.
+- Recovery data is stored **encrypted at rest** (AES-256 via Android Keystore).
+- The app lock PIN is **never** written to backups.
+- Backups are disabled at the OS level (`allowBackup="false"`).
 
 ---
 
-## Project Structure
+## Tech stack
+
+| Area | Choice |
+|------|--------|
+| Language | Kotlin (JVM target 17) |
+| UI | Jetpack Compose + Material 3 (AMOLED dark, portrait) |
+| Navigation | Navigation-Compose |
+| Light prefs | DataStore (Preferences) |
+| Recovery state | `EncryptedSharedPreferences` (Jetpack Security / Tink) |
+| Background work | WorkManager (daily reminder) |
+| Widget | Glance |
+| Security | AndroidX Biometric |
+| Min / Target SDK | 24 / 34 |
+| Build | Gradle 8.7 · AGP 8.5.2 · JDK 17 |
+
+There are **no bundled audio or image assets** — wallpapers and the app icon are
+code-defined vectors/gradients, keeping the APK tiny.
+
+---
+
+## Project layout
 
 ```
-app/src/main/java/com/aldrenstudios/selfreign/
-├── HabitApp.kt                 # Application + manual DI container
-├── MainActivity.kt             # Single activity; onboarding gate + wallpaper background
-├── data/
-│   ├── Levels.kt               # Milestone definitions
-│   ├── StoreCatalog.kt         # Unlockable wallpapers + music
-│   ├── RecoveryState.kt        # Persisted state model + derived level logic
-│   ├── RelapseEngine.kt        # PURE deterministic forgiveness/grace/hard-lock rules
-│   ├── RecoveryStateStore.kt   # Encrypted persistence (AES-256)
-│   ├── RecoveryRepository.kt   # StateFlow source of truth
-│   ├── BackupManager.kt        # JSON export + validated import
-│   └── SettingsRepository.kt   # DataStore prefs (font, reminders)
-├── audio/
-│   ├── FeedbackManager.kt      # Haptics + UI sound effects
-│   └── AmbientAudioService.kt  # Background ambient music foreground service
-├── ui/
-│   ├── MainViewModel.kt        # Shared VM: clock, relapse, store, audio, backup
-│   ├── AppNavigation.kt        # Bottom nav (Dashboard/Store/Rules/Settings)
-│   ├── onboarding/             # Welcome + animated walkthrough
-│   ├── dashboard/              # Clock, level, progress, relapse + outcome dialogs
-│   ├── store/                  # Wallpaper + music store
-│   ├── rules/                  # The Rulebook
-│   ├── settings/               # Font, feedback, music, reminders, backup, privacy
-│   └── theme/                  # Color, Type, Theme, Wallpapers (gradient brushes)
-└── util/
-    ├── BackupIo.kt             # Robust SAF read/write
-    ├── Notifications.kt        # Notification channels
-    ├── ReminderWorker.kt       # Daily encouragement reminder
-    ├── Quotes.kt               # Daily motivational quote (used by reminder)
-    └── TimeFormat.kt           # Duration formatting
+SelfReign/
+├── app/                      # The Android application module
+│   └── src/main/
+│       ├── AndroidManifest.xml
+│       ├── java/com/aldrenstudios/selfreign/
+│       │   ├── HabitApp.kt            # Application + tiny manual DI container
+│       │   ├── MainActivity.kt        # Single activity; lock / onboarding / app
+│       │   ├── audio/                 # FeedbackManager (haptics only)
+│       │   ├── data/                  # State machine, persistence, backup
+│       │   ├── ui/                    # Compose screens + the shared ViewModel
+│       │   ├── util/                  # Quotes, time formatting, reminders, PIN, backup IO
+│       │   └── widget/                # Glance home-screen widget
+│       └── res/                       # Vector icon, themes, strings
+├── logo/                     # Logo design options (SVG)
+├── PROJECT_CONTEXT.md        # Detailed technical context
+└── README.md                 # This file
 ```
 
----
-
-## Optional Assets (graceful by default)
-
-The app ships with **no binary media** and runs fine without it:
-
-- **Wallpapers** are code-defined gradient brushes (`ui/theme/Wallpapers.kt`).
-- **UI sounds** are looked up from `res/raw` by name at runtime. Drop in
-  `sfx_click`, `sfx_levelup`, `sfx_relapse` (e.g. `.ogg`) to enable them.
-- **Ambient tracks** map to `res/raw` names declared in `StoreCatalog.kt`
-  (`ambient_rain`, `ambient_forest`, `ambient_waves`, `ambient_drone`). Missing
-  files simply produce no audio — never a crash.
-
-Use only audio you have the rights to ship.
+(See `PROJECT_CONTEXT.md` for the full module map and data-flow details.)
 
 ---
 
-## How to Build & Run
+## Building
 
-1. Open the `SelfReign` folder in **Android Studio** (Hedgehog or newer).
-2. Let Gradle sync (it downloads the wrapper JAR + dependencies automatically).
-3. Requires **JDK 17** and the **Android SDK (API 34)**.
-4. Run on a device/emulator (Android 7.0 / API 24+).
+**Requirements:** Android Studio (JDK 17), Android SDK 34, Gradle 8.7 (via wrapper).
 
-Unit tests (relapse engine + time formatting): `gradlew.bat test`.
+```bash
+# Debug build
+./gradlew :app:assembleDebug
+
+# Release build (configure a signing key first)
+./gradlew :app:assembleRelease
+```
+
+### Releasing to Google Play
+1. Create/keep an upload keystore and add a `signingConfig` (or use Android Studio →
+   **Build → Generate Signed Bundle / APK** and choose **Android App Bundle**).
+2. Run a Lint pass (`./gradlew :app:lintRelease`).
+3. Upload the signed `.aab`.
+
+The release build is minified with R8; ProGuard rules live in
+`app/proguard-rules.pro`.
 
 ---
 
-## Privacy & Data Protection
+## License
 
-- **Encrypted at rest:** recovery state uses AES-256 `EncryptedSharedPreferences`.
-- **On-device only:** no internet permission, no analytics, no third parties.
-- **Backup disabled** off-device (`allowBackup=false` + extraction rules); the only
-  way data leaves is a user-initiated export file they control.
-- **User-controlled portability:** export/import a JSON backup via the system picker.
+See [`LICENSE`](LICENSE).

@@ -1,732 +1,301 @@
-# Bad Habit Tracker — Complete Project Context
+# SelfReign — Technical Context
 
-> **Purpose:** This document provides complete technical context for AI models working on this Android app. It includes architecture, data flow, file structure, key patterns, and implementation decisions.
-
----
-
-## Table of Contents
-1. [Project Overview](#project-overview)
-2. [Architecture](#architecture)
-3. [Data Flow Diagrams](#data-flow-diagrams)
-4. [Complete File Structure](#complete-file-structure)
-5. [Module Documentation](#module-documentation)
-6. [Key Implementation Patterns](#key-implementation-patterns)
-7. [Database Schema](#database-schema)
-8. [Navigation Flow](#navigation-flow)
-9. [Build Configuration](#build-configuration)
-10. [Common Tasks](#common-tasks)
+> Complete technical context for working on this app: architecture, data flow,
+> file structure, key patterns, and conventions. Kept in sync with the code.
 
 ---
 
-## Project Overview
+## 1. Overview
 
-**App Name:** SelfReign  
-**Package:** `com.aldrenstudios.selfreign`  
-**Purpose:** Help users quit/reduce bad habits by tracking clean time, logging relapses with optional notes, and providing daily motivation.
+| | |
+|---|---|
+| **App name** | SelfReign |
+| **Package** | `com.aldrenstudios.selfreign` |
+| **Purpose** | Help users quit a bad habit: track clean time, gamify progress into levels/rewards, and support relapse recovery. |
+| **Platform** | Android, Jetpack Compose, Material 3 |
+| **Min / Target / Compile SDK** | 24 / 34 / 34 |
+| **Orientation / Theme** | Portrait only, AMOLED-first dark theme |
+| **Connectivity** | 100% offline — no `INTERNET` permission |
 
-**Key Characteristics:**
-- 100% offline (no network permission, no cloud)
-- Privacy-first (GDPR-aligned, on-device only)
-- AMOLED-optimized dark themes
-- Jetpack Compose UI with Material 3
-- Min SDK 24, Target SDK 34
-
----
-
-## Architecture
-
-### High-Level Architecture Diagram
-
-```
-┌─────────────────────────────────────────────────────────────┐
-│                         UI Layer                            │
-│  ┌──────────────┐  ┌──────────────┐  ┌──────────────┐     │
-│  │ HomeScreen   │  │HistoryScreen │  │SettingsScreen│     │
-│  │   (Timer)    │  │  (Log List)  │  │ (Preferences)│     │
-│  └──────┬───────┘  └──────┬───────┘  └──────┬───────┘     │
-│         │                  │                  │              │
-│  ┌──────▼───────┐  ┌──────▼───────┐  ┌──────▼───────┐     │
-│  │HomeViewModel │  │HistoryVM     │  │SettingsVM    │     │
-│  │(1Hz ticker + │  │              │  │              │     │
-│  │ combine data)│  │              │  │              │     │
-│  └──────┬───────┘  └──────┬───────┘  └──────┬───────┘     │
-└─────────┼──────────────────┼──────────────────┼─────────────┘
-          │                  │                  │
-┌─────────▼──────────────────▼──────────────────▼─────────────┐
-│                      Domain Layer                            │
-│  ┌────────────────────┐          ┌────────────────────┐     │
-│  │  HabitRepository   │          │ SettingsRepository │     │
-│  │  • logRelapse()    │          │ • setTheme()       │     │
-│  │  • bestStreak()    │          │ • setFontSize()    │     │
-│  │  • clearHistory()  │          │ • setReminders()   │     │
-│  └─────────┬──────────┘          └─────────┬──────────┘     │
-└───────────┼─────────────────────────────────┼────────────────┘
-            │                                 │
-┌───────────▼─────────────────────────────────▼────────────────┐
-│                       Data Layer                             │
-│  ┌────────────────────┐          ┌────────────────────┐     │
-│  │   Room Database    │          │   DataStore        │     │
-│  │ ┌────────────────┐ │          │  (Preferences)     │     │
-│  │ │ RelapseEvent   │ │          │  • theme           │     │
-│  │ │ • id           │ │          │  • fontSize        │     │
-│  │ │ • timestamp    │ │          │  • reminders       │     │
-│  │ │ • note         │ │          │                    │     │
-│  │ └────────────────┘ │          │                    │     │
-│  │ ┌────────────────┐ │          │                    │     │
-│  │ │  RelapseDao    │ │          │                    │     │
-│  │ │  (Queries)     │ │          │                    │     │
-│  │ └────────────────┘ │          │                    │     │
-│  └────────────────────┘          └────────────────────┘     │
-│         (habit.db)                  (settings prefs)        │
-└──────────────────────────────────────────────────────────────┘
-```
-
-### Layer Responsibilities
-
-| Layer | Components | Purpose |
-|-------|------------|---------|
-| **UI** | Screens (Composables) | User interaction, visual presentation |
-| **ViewModel** | ViewModels | State management, reactive data streams |
-| **Domain** | Repositories | Business logic, data orchestration |
-| **Data** | Room DB, DataStore | Persistence, queries |
+**Permissions used:** `POST_NOTIFICATIONS` (daily reminder, Android 13+) and
+`VIBRATE` (opt-in haptics). Nothing else.
 
 ---
 
-## Data Flow Diagrams
+## 2. Architecture
 
-### 1. Timer Flow (Home Screen)
-
-```
-┌──────────────────────────────────────────────────────────────┐
-│                     HomeViewModel                            │
-│                                                              │
-│  ticker (Flow<Long>)                                         │
-│  emit every 1000ms ────┐                                     │
-│                        │                                     │
-│  repo.lastRelapseTimestamp (Flow<Long?>) ──┐                │
-│  repo.relapseCount (Flow<Int>) ────────────┼──┐             │
-│  repo.bestStreakMillis() (Flow<Long>) ─────┼──┼──┐          │
-│                        │                    │  │  │          │
-│                        └────────────────────┴──┴──┴──────┐   │
-│                                  combine()               │   │
-│                                     │                    │   │
-│                                     ▼                    │   │
-│                        ┌────────────────────────┐        │   │
-│                        │   HomeUiState          │        │   │
-│                        │ • elapsedMillis        │◄───────┘   │
-│                        │ • relapseCount         │            │
-│                        │ • bestStreakMillis     │            │
-│                        │ • quote                │            │
-│                        └────────┬───────────────┘            │
-└─────────────────────────────────┼────────────────────────────┘
-                                  │
-                                  ▼
-                          ┌───────────────┐
-                          │  HomeScreen   │
-                          │  (Compose UI) │
-                          └───────────────┘
-```
-
-**Key insight:** Timer is derived, not stored. `elapsedMillis = now - lastRelapseTimestamp`. When a relapse is logged, the DB updates `lastRelapseTimestamp`, and the UI updates automatically via Flow.
-
-### 2. Relapse Logging Flow
+A lightweight, layered, single-activity Compose app. No DI framework — `HabitApp`
+acts as a tiny manual container.
 
 ```
-User taps "I Relapsed"
+┌──────────────────────────── UI (Compose) ────────────────────────────┐
+│ MainActivity → AppNavigation (bottom nav + NavHost)                   │
+│   Dashboard · Insights · Store · Rules · Settings  (+ History page)   │
+│   Onboarding · LockScreen · PanicSheet · CelebrationOverlay           │
+│                         │ observes StateFlows                         │
+│                MainViewModel (activity-scoped)                        │
+│                SettingsViewModel (lightweight prefs)                  │
+└─────────────────────────────┼─────────────────────────────────────────┘
+                              │
+┌──────────────────────────── Domain ──────────────────────────────────┐
+│ RecoveryRepository  ── single source of truth (StateFlow<RecoveryState>)│
+│ RelapseEngine       ── pure relapse/grace state machine (no Android)   │
+│ Levels              ── milestone ladder (customizable thresholds)      │
+│ BackupManager       ── versioned JSON export/import + validation       │
+└─────────────────────────────┼─────────────────────────────────────────┘
+                              │
+┌──────────────────────────── Data ────────────────────────────────────┐
+│ RecoveryStateStore  ── EncryptedSharedPreferences (AES-256 / Keystore) │
+│ SettingsRepository  ── DataStore (Preferences): reminders flag only    │
+└───────────────────────────────────────────────────────────────────────┘
+```
+
+### Layers
+
+| Layer | Components | Responsibility |
+|-------|------------|----------------|
+| UI | `ui/**` composables | Presentation, interaction |
+| ViewModel | `MainViewModel`, `SettingsViewModel` | State exposure, reactive streams |
+| Domain | `RecoveryRepository`, `RelapseEngine`, `Levels`, `BackupManager` | Business logic |
+| Data | `RecoveryStateStore`, `SettingsRepository` | Persistence |
+
+---
+
+## 3. State & data flow
+
+### Single source of truth
+`RecoveryRepository` loads the persisted `RecoveryState` once and exposes it as a
+`StateFlow`. Every mutation goes through `update()` which **saves to the encrypted
+store and emits** the new state, so the whole UI reacts automatically.
+
+### The clock & derived state (performance-critical)
+`MainViewModel` runs a 1 Hz loop that updates a `now: StateFlow<Long>` and calls
+`recovery.refresh(now)` to resolve any elapsed grace transitions.
+
+To avoid recomposing whole screens every second, slowly-changing values are exposed
+as **derived** flows that only emit when their value actually changes:
+
+```kotlin
+val effectiveLevel: StateFlow<Int> =
+    combine(state, now) { s, t -> s.effectiveLevel(t) }
+        .distinctUntilChanged()
+        .stateIn(...)
+// likewise: organicLevel, graceShielding
+```
+
+Only the live clock subtree (the ring + countdown, the money chip, the grace badge)
+reads `now`. The Dashboard, Store, etc. read the derived flows and therefore
+recompose only on meaningful change.
+
+### Relapse flow
+
+```
+User taps "I Relapsed" → RelapseLogDialog (optional note + trigger)
         │
+        ▼  MainViewModel.confirmRelapse(note, trigger)
+   RecoveryRepository.relapse() → RelapseEngine.processRelapse(state, now, …)
+        │ persists new state, emits StateFlow, refreshes widget
         ▼
-┌───────────────────┐
-│  RelapseDialog    │ ◄── Optional note input
-└────────┬──────────┘
-         │ confirm
-         ▼
-┌─────────────────────────────────────────────┐
-│ HomeViewModel.logRelapse(note)              │
-│   viewModelScope.launch {                   │
-│     repo.logRelapse(now(), note)            │
-│   }                                         │
-└────────┬────────────────────────────────────┘
-         │
-         ▼
-┌─────────────────────────────────────────────┐
-│ HabitRepository.logRelapse(ts, note)        │
-│   dao.insert(RelapseEvent(...))            │
-└────────┬────────────────────────────────────┘
-         │
-         ▼
-┌─────────────────────────────────────────────┐
-│ Room Database (relapse_events table)        │
-│   INSERT new row                            │
-└────────┬────────────────────────────────────┘
-         │
-         ▼ (Flow emits updated data)
-┌─────────────────────────────────────────────┐
-│ dao.observeLastTimestamp() emits new value  │
-│ dao.observeCount() emits incremented count  │
-└────────┬────────────────────────────────────┘
-         │
-         ▼
-┌─────────────────────────────────────────────┐
-│ HomeViewModel's combine() recomputes state  │
-│ Timer resets automatically                  │
-└─────────────────────────────────────────────┘
-```
-
-### 3. Settings → Theme Flow
-
-```
-User selects "Midnight Blue"
-        │
-        ▼
-┌───────────────────────────────────────┐
-│ SettingsViewModel.setTheme(MIDNIGHT) │
-│   repo.setTheme(MIDNIGHT)             │
-└────────┬──────────────────────────────┘
-         │
-         ▼
-┌────────────────────────────────────────┐
-│ SettingsRepository                     │
-│   dataStore.edit { it[THEME] = value } │
-└────────┬───────────────────────────────┘
-         │
-         ▼ (Flow emits new UserSettings)
-┌────────────────────────────────────────┐
-│ MainActivity observes settings         │
-│   settings.collectAsStateWithLifecycle │
-└────────┬───────────────────────────────┘
-         │
-         ▼
-┌────────────────────────────────────────┐
-│ selfreignTheme(theme, fontSize)  │
-│   MaterialTheme recomposes with new    │
-│   colorScheme                          │
-└────────────────────────────────────────┘
-         │
-         ▼
-   All screens update instantly
+   OutcomeDialog shows FIRST_FORGIVENESS / GRACE_STARTED / HARD_LOCK
 ```
 
 ---
 
-## Complete File Structure
+## 4. The recovery state machine (`RelapseEngine`)
+
+Pure and deterministic (no Android deps → unit-testable). Rules in priority order:
+
+1. **First-time forgiveness** — if `hasUsedFirstForgiveness` is false, the first
+   relapse is forgiven: the streak is **not** reset, the flag is set.
+2. **Grace period** — a subsequent relapse (not already in grace) opens a grace
+   timer whose duration equals the time it took to reach the user's current level
+   (`Levels.graceMillisForLevel`). The streak resets to `now`; the reached level's
+   rewards stay **temporarily** unlocked (`graceProtectedLevel`).
+3. **Hard lock** — relapsing again during an active grace (or letting it expire via
+   `evaluateExpiry`) drops protection back to the organically-earned level.
+
+`evaluateExpiry(state, now)` (called opportunistically each tick) closes grace
+either **successfully** (organic level caught back up to the protected level) or by
+**expiry** (timer elapsed first). It returns the same instance when nothing changed,
+so it’s cheap to call frequently and never triggers a needless save/emit.
+
+Relapse history is capped at `MAX_LOG_ENTRIES = 500` (most recent kept).
+
+---
+
+## 5. Levels (`Levels` / `Level`)
+
+- Six levels (0–5) with fixed titles: *Beginning, First Light, Momentum,
+  One Week Strong, Steadfast, Transformed*.
+- Day thresholds are **user-customizable** (Settings → Milestones) and sanitized to
+  be strictly increasing with level 0 == 0.
+- `effectiveLevel(now) = max(organicLevel, graceProtectedLevel during grace)`.
+- `organicLevel(now)` = level earned purely from the current uninterrupted streak.
+
+---
+
+## 6. Persistence
+
+### Recovery state — `RecoveryStateStore`
+`EncryptedSharedPreferences` (AES-256-GCM values, AES-256-SIV keys) behind a
+Keystore master key. Falls back to plain prefs only if the secure store can't be
+created (rare device keystore issues) so the app never crashes on boot.
+
+`RecoveryState` (persisted fields): streak start, relapse count, first-forgiveness
+flag, best streak, relapse log, grace fields, onboarding flag, selected wallpaper,
+`hapticsEnabled`, custom level thresholds, money (cents + currency), app-lock fields
+(`appLockEnabled`, `biometricEnabled`, `pinHash`).
+
+### Light prefs — `SettingsRepository` (DataStore)
+Only `remindersEnabled`. Text size is **not** stored — it follows the device’s own
+font-size setting (Compose `sp`).
+
+### Backup — `BackupManager`
+Versioned, validated JSON (`magic`/`version` checks, range clamps, catalog lookups).
+**Security:** the app-lock PIN/flags are never exported and never restored — they’re
+device-local. On import, `MainViewModel.importJson` re-applies the importing device’s
+own lock settings to the restored state.
+
+---
+
+## 7. Feedback (haptics)
+
+`FeedbackManager` provides short, distinct vibration patterns for CLICK / LEVEL_UP /
+RELAPSE. **Haptics default to OFF** and are toggled in Settings. There are no UI
+sounds or background music (the app ships no audio assets).
+
+---
+
+## 8. Notifications & background work
+
+- `Notifications.createChannel` creates a single "Encouragement" channel.
+- `ReminderWorker` (WorkManager `PeriodicWorkRequest`, ~daily, 3h initial delay)
+  posts the day's motivational quote. It uses a dedicated monochrome small icon
+  (`ic_notification`) and guards every step so it can never crash the app. Scheduling
+  is enabled/cancelled from Settings and the permission request is wrapped defensively.
+
+---
+
+## 9. Theming & iconography
+
+- `SelfReignTheme` — a single dark `colorScheme` + default `Typography` (one font,
+  `sp`-based so it respects the device font scale). No in-app font option.
+- `Wallpapers` — code-defined gradient `Brush`es, **cached** so they’re not
+  reallocated on recomposition. Painted as the global background in `MainActivity`.
+- App icon — adaptive vector (green leaf foreground on black) with a monochrome
+  themed-icon layer and a pre-API-26 vector fallback. Logo design options live in
+  `/logo` (SVG).
+
+---
+
+## 10. Complete file map
 
 ```
-selfreign/
-├── README.md                          # User documentation
-├── PROJECT_CONTEXT.md                 # This file (technical context)
-├── build.gradle.kts                   # Root Gradle config (plugin versions)
-├── settings.gradle.kts                # Module declarations
-├── gradle.properties                  # JVM args, AndroidX flag
-├── .gitignore                         # Excludes build/, .idea/, etc.
+app/src/main/java/com/aldrenstudios/selfreign/
+├── HabitApp.kt                 # Application; lazy repos + FeedbackManager; channel + refresh on start
+├── MainActivity.kt             # FragmentActivity; gates Lock → Onboarding → App; paints wallpaper
 │
-├── gradle/wrapper/
-│   └── gradle-wrapper.properties      # Gradle 8.7 distribution URL
+├── audio/
+│   └── FeedbackManager.kt      # Haptics only (opt-in)
 │
-├── gradlew                            # Unix Gradle wrapper
-├── gradlew.bat                        # Windows Gradle wrapper
+├── data/
+│   ├── Levels.kt               # Level model + customizable ladder
+│   ├── RecoveryState.kt        # Persisted state + derived helpers; RelapseLogEntry; Trigger
+│   ├── RecoveryStateStore.kt   # EncryptedSharedPreferences persistence
+│   ├── RecoveryRepository.kt   # Single source of truth (StateFlow)
+│   ├── RelapseEngine.kt        # Pure relapse/grace state machine
+│   ├── SettingsRepository.kt   # DataStore prefs (reminders)
+│   ├── StoreCatalog.kt         # Unlockable wallpapers
+│   └── BackupManager.kt        # Versioned JSON backup + validation
 │
-└── app/
-    ├── build.gradle.kts               # App module config (deps, SDK versions)
-    ├── proguard-rules.pro             # R8/ProGuard rules for release builds
-    │
-    └── src/
-        ├── main/
-        │   ├── AndroidManifest.xml    # App declaration, permissions, activity
-        │   │
-        │   ├── res/
-        │   │   ├── values/
-        │   │   │   ├── strings.xml              # All UI strings (i18n-ready)
-        │   │   │   ├── themes.xml               # XML theme (splash, system bars)
-        │   │   │   └── ic_launcher_background.xml  # Launcher bg color
-        │   │   │
-        │   │   ├── drawable/
-        │   │   │   └── ic_launcher_foreground.xml  # Launcher icon vector
-        │   │   │
-        │   │   ├── mipmap-anydpi/             # Pre-API 26 launcher icons
-        │   │   │   ├── ic_launcher.xml
-        │   │   │   └── ic_launcher_round.xml
-        │   │   │
-        │   │   ├── mipmap-anydpi-v26/         # Adaptive icons (API 26+)
-        │   │   │   ├── ic_launcher.xml
-        │   │   │   └── ic_launcher_round.xml
-        │   │   │
-        │   │   └── xml/
-        │   │       └── data_extraction_rules.xml  # Disable backup (privacy)
-        │   │
-        │   └── java/com/example/selfreign/
-        │       ├── HabitApp.kt                # Application class + DI container
-        │       ├── MainActivity.kt            # Single activity, hosts Compose
-        │       │
-        │       ├── data/                      # Data layer
-        │       │   ├── RelapseEvent.kt        # Room @Entity
-        │       │   ├── RelapseDao.kt          # Room @Dao (Flow queries)
-        │       │   ├── HabitDatabase.kt       # Room DB singleton
-        │       │   ├── HabitRepository.kt     # Relapse data orchestration
-        │       │   └── SettingsRepository.kt  # DataStore preferences wrapper
-        │       │
-        │       ├── ui/                        # UI layer
-        │       │   ├── AppNavigation.kt       # Bottom nav + NavHost
-        │       │   │
-        │       │   ├── theme/                 # Compose theming
-        │       │   │   ├── Color.kt           # Color palette definitions
-        │       │   │   ├── Type.kt            # Typography + scaling
-        │       │   │   └── Theme.kt           # selfreignTheme composable
-        │       │   │
-        │       │   ├── components/            # Reusable UI
-        │       │   │   └── RelapseDialog.kt   # Note input dialog
-        │       │   │
-        │       │   ├── home/                  # Home screen + ViewModel
-        │       │   │   ├── HomeViewModel.kt   # State + timer logic
-        │       │   │   └── HomeScreen.kt      # UI (timer, stats, quote)
-        │       │   │
-        │       │   ├── history/               # History screen + ViewModel
-        │       │   │   ├── HistoryViewModel.kt
-        │       │   │   └── HistoryScreen.kt   # Relapse log list
-        │       │   │
-        │       │   └── settings/              # Settings screen + ViewModel
-        │       │       ├── SettingsViewModel.kt
-        │       │       └── SettingsScreen.kt  # Theme, font, reminders
-        │       │
-        │       └── util/                      # Utilities
-        │           ├── Quotes.kt              # Motivational quote rotation
-        │           ├── TimeFormat.kt          # Duration formatting
-        │           ├── Notifications.kt       # Notification channel setup
-        │           └── ReminderWorker.kt      # WorkManager daily reminder
-        │
-        └── test/java/com/example/selfreign/
-            └── TimeFormatTest.kt              # Unit tests for time logic
+├── ui/
+│   ├── AppNavigation.kt        # Bottom nav + NavHost (fade-through transitions) + History route
+│   ├── MainViewModel.kt        # Shared VM: clock, derived flows, relapse, store, lock, backup
+│   ├── celebrate/CelebrationOverlay.kt
+│   ├── components/ProgressRing.kt
+│   ├── dashboard/DashboardScreen.kt   # No-scroll responsive hero layout
+│   ├── dashboard/DetailSheets.kt      # Streak / Level bottom sheets
+│   ├── dashboard/RelapseLogDialog.kt
+│   ├── history/HistoryScreen.kt       # Full-page relapse history
+│   ├── insights/InsightsScreen.kt     # Stats + trigger breakdown
+│   ├── lock/LockScreen.kt             # PIN / biometric gate
+│   ├── onboarding/OnboardingScreen.kt # Welcome + 3-step walkthrough
+│   ├── panic/PanicSheet.kt            # Guided box-breathing
+│   ├── rules/RulesScreen.kt
+│   ├── settings/SettingsScreen.kt
+│   ├── settings/SettingsViewModel.kt
+│   ├── store/StoreScreen.kt           # Wallpaper rewards
+│   └── theme/ (Color.kt, Theme.kt, Wallpapers.kt)
+│
+├── util/
+│   ├── BackupIo.kt             # SAF read/write for backup files
+│   ├── Notifications.kt        # Notification channel
+│   ├── PinHasher.kt            # Salted PIN hashing/verification
+│   ├── Quotes.kt               # Daily motivational quotes
+│   ├── ReminderWorker.kt       # WorkManager daily reminder
+│   └── TimeFormat.kt           # Duration / date formatting
+│
+└── widget/
+    ├── StreakWidget.kt         # Glance widget + receiver
+    └── WidgetUpdater.kt        # Best-effort updateAll()
 ```
 
 ---
 
-## Module Documentation
+## 11. Navigation
 
-### Data Layer
+`AppNavigation` hosts a `Scaffold` with a `NavigationBar` (Dashboard, Insights,
+Store, Rules, Settings) and a `NavHost`. **History** is a sub-page route reached from
+the Dashboard "Total relapses" chip and the Insights "Total relapses" card. All
+transitions use a quick fade-through + subtle scale.
 
-#### **RelapseEvent.kt** (Entity)
-```kotlin
-@Entity(tableName = "relapse_events")
-data class RelapseEvent(
-    @PrimaryKey(autoGenerate = true) val id: Long = 0,
-    val timestamp: Long,      // Epoch millis
-    val note: String? = null  // Optional user note
-)
-```
-
-#### **RelapseDao.kt** (Data Access)
-| Method | Return | Purpose |
-|--------|--------|---------|
-| `insert(event)` | `Long` | Inserts relapse, returns generated ID |
-| `observeAll()` | `Flow<List<RelapseEvent>>` | All relapses, newest first (for History) |
-| `observeLastTimestamp()` | `Flow<Long?>` | Most recent relapse time (drives timer) |
-| `observeCount()` | `Flow<Int>` | Total relapse count |
-| `observeTimestampsAsc()` | `Flow<List<Long>>` | All timestamps ascending (for streak calc) |
-| `clearAll()` | `suspend` | Deletes all events |
-
-All `observe*` methods return Flows that emit new values automatically when the DB changes.
-
-#### **HabitRepository.kt**
-**Streak Computation Logic:**
-```kotlin
-fun bestStreakMillis(now: () -> Long): Flow<Long> =
-    dao.observeTimestampsAsc().map { timestamps ->
-        if (timestamps.isEmpty()) return@map 0L
-        var best = 0L
-        // Compare consecutive relapses
-        for (i in 1 until timestamps.size) {
-            best = maxOf(best, timestamps[i] - timestamps[i - 1])
-        }
-        // Include ongoing streak (last relapse → now)
-        best = maxOf(best, now() - timestamps.last())
-        best
-    }
-```
-
-#### **SettingsRepository.kt**
-Stores preferences as DataStore key-value pairs:
-- `THEME` → `"AMOLED" | "DARK_GRAY" | "MIDNIGHT_BLUE"`
-- `FONT_SIZE` → `"SMALL" | "MEDIUM" | "LARGE"`
-- `REMINDERS` → `true | false`
-
-Exposed as a single `Flow<UserSettings>` data class.
+`MainActivity` switches between three top-level states before navigation:
+**Locked** (if app lock on) → **Onboarding** (first run) → **App**.
 
 ---
 
-### UI Layer
+## 12. Key patterns & conventions
 
-#### **HomeViewModel.kt** — Timer Logic
-```kotlin
-// Ticker emits current time every second
-private val ticker: Flow<Long> = flow {
-    while (true) {
-        emit(System.currentTimeMillis())
-        delay(1000)
-    }
-}
-
-// Combine ticker with DB data to derive state
-val uiState: StateFlow<HomeUiState> = combine(
-    ticker,
-    repo.lastRelapseTimestamp,
-    repo.relapseCount,
-    repo.bestStreakMillis { System.currentTimeMillis() }
-) { now, lastTs, count, best ->
-    val elapsed = if (lastTs != null) now - lastTs else 0L
-    HomeUiState(elapsed, count, best, lastTs != null, Quotes.forDay(now))
-}.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), HomeUiState())
-```
-
-**Key Pattern:** Timer is **derived**, not stored. The UI always recalculates `elapsed = now - lastRelapseTimestamp`, so it survives process death and never drifts.
-
-#### **AppNavigation.kt** — Bottom Nav Structure
-Three destinations:
-1. **HOME** (`home`) → `HomeScreen`
-2. **HISTORY** (`history`) → `HistoryScreen`
-3. **SETTINGS** (`settings`) → `SettingsScreen`
-
-Navigation uses `singleTop + popUpTo(startDestination)` to avoid stack buildup.
-
-#### **Theme System**
-Three dark color schemes (all true-dark, no light mode):
-- **AMOLED** → `#000000` background (true black for max battery savings)
-- **DARK_GRAY** → `#121212` background
-- **MIDNIGHT_BLUE** → `#0B1020` background
-
-Typography scales by `FontSizeOption.scale` (0.9f / 1.0f / 1.15f) applied to all text styles.
+- **Reactive:** `Store/DataStore → StateFlow → ViewModel (derived) → collectAsStateWithLifecycle → Compose`.
+- **Manual DI:** dependencies are lazy `val`s on `HabitApp`; ViewModels use nested
+  `Factory` classes.
+- **Recomposition scoping:** read `now` only in the smallest live composable; expose
+  slow values via `distinctUntilChanged` derived flows.
+- **Defensive by default:** persistence, backup import, reminder scheduling, haptics,
+  and widget updates all swallow/contain failures rather than crashing.
+- **No new dependencies / assets** without good reason — wallpapers and icons are code.
+- **Naming:** Composables `PascalCase`, functions `camelCase`, constants `UPPER_SNAKE_CASE`.
 
 ---
 
-## Key Implementation Patterns
-
-### 1. Reactive State Management
-```
-Room/DataStore → Flow → ViewModel combine() → StateFlow → Compose UI
-```
-- DB queries return `Flow<T>`
-- ViewModels `combine()` multiple flows into UI state
-- Screens use `collectAsStateWithLifecycle()` for lifecycle-aware collection
-- Result: UI updates automatically when data changes, no manual refresh
-
-### 2. Manual Dependency Injection
-```kotlin
-// HabitApp.kt
-class HabitApp : Application() {
-    val habitRepository by lazy {
-        HabitRepository(HabitDatabase.get(this).relapseDao())
-    }
-    val settingsRepository by lazy {
-        SettingsRepository(this)
-    }
-}
-
-// Usage in Composables
-val app = application as HabitApp
-val vm: HomeViewModel = viewModel(
-    factory = HomeViewModel.Factory(app.habitRepository)
-)
-```
-No Hilt/Dagger — simple property delegation for this app size.
-
-### 3. ViewModelProvider.Factory Pattern
-Every ViewModel has a nested `Factory` class:
-```kotlin
-class HomeViewModel(private val repo: HabitRepository) : ViewModel() {
-    // ...
-    class Factory(private val repo: HabitRepository) : ViewModelProvider.Factory {
-        override fun <T : ViewModel> create(modelClass: Class<T>): T =
-            HomeViewModel(repo) as T
-    }
-}
-```
-Allows passing repository dependencies without DI framework.
-
-### 4. Sealed Enums for Settings
-```kotlin
-enum class ThemeOption { AMOLED, DARK_GRAY, MIDNIGHT_BLUE }
-enum class FontSizeOption(val scale: Float) {
-    SMALL(0.9f), MEDIUM(1.0f), LARGE(1.15f)
-}
-```
-Type-safe, persisted as enum names in DataStore.
-
----
-
-## Database Schema
-
-### Table: `relapse_events`
-
-| Column | Type | Constraints | Description |
-|--------|------|-------------|-------------|
-| `id` | INTEGER | PRIMARY KEY AUTOINCREMENT | Unique event ID |
-| `timestamp` | INTEGER | NOT NULL | Epoch milliseconds when logged |
-| `note` | TEXT | NULLABLE | Optional user note (trigger/feeling) |
-
-**Indexes:** None (table is small; primary key index sufficient).
-
-**Queries:**
-- `SELECT * ORDER BY timestamp DESC` → History screen
-- `SELECT MAX(timestamp)` → Timer calculation
-- `SELECT COUNT(*)` → Total relapse count
-- `SELECT timestamp ORDER BY timestamp ASC` → Best streak
-
----
-
-## Navigation Flow
-
-```
-MainActivity (single activity)
-    │
-    └── AppNavigation (Scaffold + NavHost)
-            │
-            ├── home → HomeScreen
-            │     ↕ (dialog)
-            │   RelapseDialog (log relapse with note)
-            │
-            ├── history → HistoryScreen
-            │     ↕ (dialog)
-            │   Clear History Confirmation
-            │
-            └── settings → SettingsScreen
-                  ↕ (permission request)
-                POST_NOTIFICATIONS (Android 13+)
-```
-
-**Bottom Navigation Behavior:**
-- Tap same item twice → no action
-- Tap different item → navigate, pop back stack to start, save/restore state
-- No deep linking currently implemented
-
----
-
-## Build Configuration
-
-### SDK Versions
-```kotlin
-minSdk = 24    // Android 7.0 (covers 95%+ devices)
-targetSdk = 34 // Android 14 (latest)
-compileSdk = 34
-```
-
-### Key Dependencies
-| Dependency | Version | Purpose |
-|------------|---------|---------|
-| `androidx.core:core-ktx` | 1.13.1 | Kotlin extensions |
-| `androidx.compose:compose-bom` | 2024.06.00 | Compose version alignment |
-| `androidx.room:room-ktx` | 2.6.1 | Local database |
-| `androidx.datastore:datastore-preferences` | 1.1.1 | Key-value settings |
-| `androidx.work:work-runtime-ktx` | 2.9.0 | Background reminders |
-| `androidx.navigation:navigation-compose` | 2.7.7 | Screen navigation |
-
-### ProGuard/R8 Rules
-```proguard
--keep class * extends androidx.room.RoomDatabase { *; }
--keep @androidx.room.Entity class * { *; }
--keep class androidx.compose.** { *; }
-```
-
-### Gradle JVM Args
-```properties
-org.gradle.jvmargs=-Xmx2048m -Dfile.encoding=UTF-8
-org.gradle.parallel=true
-```
-
----
-
-## Common Tasks
-
-### Add a New Screen
-1. Create `ui/newscreen/NewScreen.kt` (composable)
-2. Create `ui/newscreen/NewViewModel.kt` (+ Factory)
-3. Add route to `AppNavigation.kt` enum `Dest`
-4. Add `composable()` in `NavHost` in `AppNavigation.kt`
-5. Add icon + string resources
-
-### Add a Database Field
-1. Modify entity in `data/RelapseEvent.kt`
-2. Increment `@Database(version = X)` in `HabitDatabase.kt`
-3. Provide migration or use `fallbackToDestructiveMigration()`
-4. Update DAO queries if needed
-5. Update repository/ViewModel to expose new field
-
-### Add a New Setting
-1. Add enum option to `data/SettingsRepository.kt`
-2. Add DataStore key + read/write methods
-3. Update `UserSettings` data class
-4. Add UI controls in `ui/settings/SettingsScreen.kt`
-5. Use setting in `MainActivity` or relevant ViewModel
-
-### Change App Name
-1. Update `app_name` in `res/values/strings.xml`
-2. Update `android:label` in `AndroidManifest.xml` (or remove to use strings.xml)
-
-### Change Package Name
-**Warning:** Requires refactor across 50+ files. Use Android Studio:
-1. Right-click package in Project view
-2. Refactor → Rename
-3. Check "Rename package" + "Search in comments/strings"
-4. Update `applicationId` in `app/build.gradle.kts`
-5. Update `namespace` in `app/build.gradle.kts`
-
----
-
-## Privacy & Compliance Notes
-
-**GDPR Alignment:**
-- **Data minimisation:** Only timestamp + optional note stored
-- **Purpose limitation:** Data used only for habit tracking
-- **Storage limitation:** User can clear all data instantly
-- **On-device processing:** No network calls, no third parties
-- **Right to erasure:** "Clear history" permanently deletes all events
-- **No consent needed:** No tracking, analytics, or ads
-
-**Backup Disabled:**
-```xml
-<!-- AndroidManifest.xml -->
-<application
-    android:allowBackup="false"
-    android:dataExtractionRules="@xml/data_extraction_rules"
-    android:fullBackupContent="false">
-```
-
-```xml
-<!-- data_extraction_rules.xml -->
-<data-extraction-rules>
-    <cloud-backup>
-        <exclude domain="root" path="." />
-    </cloud-backup>
-    <device-transfer>
-        <exclude domain="root" path="." />
-    </device-transfer>
-</data-extraction-rules>
-```
-
----
-
-## Testing Strategy
-
-### Unit Tests (JUnit)
-- `TimeFormatTest.kt` — Duration math, edge cases
-- **Coverage:** Time utilities, business logic
-
-### UI Tests (Compose)
-- None currently implemented
-- **Recommended:** Test relapse dialog, navigation flows
-
-### Manual Testing Checklist
-- [ ] Timer updates every second
-- [ ] Relapse resets timer
-- [ ] History shows logged events with notes
-- [ ] Clear history confirmation works
-- [ ] Theme changes apply instantly
-- [ ] Font size changes scale all text
-- [ ] Reminder toggle schedules WorkManager job
-- [ ] App survives process death (data persists)
-- [ ] Motivational quote rotates daily
-
----
-
-## Known Limitations
-
-1. **Single habit only** — can't track multiple habits in parallel
-2. **No data export** — no CSV/JSON export (future feature)
-3. **No biometric lock** — app data visible to anyone with device access
-4. **No widgets** — timer not visible without opening app
-5. **Fixed reminder time** — WorkManager schedules roughly daily, no time control
-6. **English only** — strings are i18n-ready but only EN provided
-
----
-
-## Future Enhancement Ideas
-
-Ranked by implementation effort (easiest first):
-
-1. **Money saved counter** — multiply days × cost/day
-2. **Milestone badges** — celebrate 1d/7d/30d/100d streaks
-3. **Home screen widget** — show timer without opening app
-4. **Multiple habits** — parallel tracking with separate timers
-5. **Trigger tagging** — categorize relapses (stress/social/boredom)
-6. **Data export** — encrypted backup file for user-controlled backup
-7. **Adaptive reminders** — schedule based on user's risky times
-8. **Panic mode** — breathing exercise or distraction on craving
-9. **Biometric lock** — secure app with fingerprint/face
-10. **Social accountability** — generate shareable streak image
-
----
-
-## Debugging Commands
+## 13. Build & release
 
 ```bash
-# View logs (filter by package)
-adb logcat | grep "selfreign"
-
-# Inspect database (requires root or debuggable build)
-adb shell
-run-as com.aldrenstudios.selfreign
-cd databases
-sqlite3 habit.db
-.tables
-SELECT * FROM relapse_events;
-
-# Clear app data
-adb shell pm clear com.aldrenstudios.selfreign
-
-# Reinstall APK
-adb install -r app/build/outputs/apk/debug/app-debug.apk
-
-# Trigger WorkManager job immediately (testing)
-adb shell am broadcast -a "androidx.work.diagnostics.REQUEST_DIAGNOSTICS" \
-  -p com.aldrenstudios.selfreign
+./gradlew :app:assembleDebug      # debug APK
+./gradlew :app:assembleRelease    # minified (R8) release APK/AAB
 ```
 
----
-
-## Code Style & Conventions
-
-- **Language:** Kotlin 1.9.24, JVM target 17
-- **Null safety:** Prefer `?` and `?.let {}` over `!!`
-- **Immutability:** Use `val` over `var`, `data class` for DTOs
-- **Async:** `suspend` + `viewModelScope.launch` for coroutines
-- **Compose:** Stateless composables + hoist state to ViewModels
-- **Naming:**
-  - Composables: `PascalCase` (e.g., `HomeScreen`)
-  - Functions: `camelCase` (e.g., `logRelapse`)
-  - Constants: `UPPER_SNAKE_CASE` (e.g., `CHANNEL_ID`)
+- JDK 17, Gradle 8.7, AGP 8.5.2.
+- Release is minified; keep `app/proguard-rules.pro` rules for Compose, Glance,
+  WorkManager (`ListenableWorker` subclasses), and Tink.
+- For Play: configure a signing key, run `lintRelease`, and upload an **AAB**.
 
 ---
 
-## Contact & Maintenance
+## 14. Common tasks
 
-**Build Requirements:**
-- Android Studio Hedgehog+ (or IntelliJ IDEA with Android plugin)
-- JDK 17
-- Android SDK 34
-- Gradle 8.7 (via wrapper)
-
-**First Build Steps:**
-1. Open project in Android Studio
-2. Wait for Gradle sync (downloads wrapper JAR + dependencies)
-3. Run on device/emulator (min API 24)
-
-**Typical build time:** 30-60s on first sync, 5-10s incremental.
+| Task | Where |
+|------|-------|
+| Add a quote | `util/Quotes.kt` |
+| Change level titles / count | `data/Levels.kt` |
+| Tune the relapse/grace rules | `data/RelapseEngine.kt` |
+| Add a new wallpaper | `data/StoreCatalog.kt` + a gradient in `ui/theme/Wallpapers.kt` |
+| Add a persisted field | `RecoveryState` + `RecoveryStateStore` (load/save) + `BackupManager` |
+| Add a screen | new composable in `ui/`, add a `Dest` + `composable()` in `AppNavigation.kt` |
+| Change the app icon | swap the leaf path in `res/drawable/ic_launcher_foreground.xml` (+ monochrome / mipmap-anydpi / `ic_notification`); options in `/logo` |
 
 ---
 
-## Glossary
-
-| Term | Definition |
-|------|------------|
-| **AMOLED** | Active Matrix Organic LED — display tech where black pixels = off = battery savings |
-| **DataStore** | Jetpack library for async, type-safe key-value storage (replaces SharedPreferences) |
-| **Flow** | Kotlin Coroutines reactive stream that emits values over time |
-| **Room** | Jetpack library providing SQLite abstraction with compile-time query verification |
-| **StateFlow** | Hot Flow that always has a value and caches the latest emission |
-| **WorkManager** | Jetpack library for deferrable, guaranteed background tasks |
-| **Composable** | Kotlin function annotated with `@Composable` that emits UI |
-| **Recomposition** | Compose re-executing composables when state changes |
-
----
-
-**End of Project Context Document**  
-*Last updated: 2026-06-04*  
-*For questions or clarifications, refer to inline code comments or README.md*
-
+*Keep this document updated when architecture changes. Last refreshed for the
+1.0.0 release pass: dead audio removed, single font, no-scroll dashboard, derived-state
+performance model, vector logo.*
