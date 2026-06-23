@@ -4,6 +4,7 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -13,10 +14,8 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.EmojiEvents
 import androidx.compose.material.icons.filled.Refresh
@@ -44,11 +43,14 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.aldrenstudios.selfreign.R
+import com.aldrenstudios.selfreign.data.Level
 import com.aldrenstudios.selfreign.data.Levels
+import com.aldrenstudios.selfreign.data.RecoveryState
 import com.aldrenstudios.selfreign.data.RelapseOutcome
 import com.aldrenstudios.selfreign.ui.MainViewModel
 import com.aldrenstudios.selfreign.ui.components.ProgressRing
@@ -58,156 +60,141 @@ import com.aldrenstudios.selfreign.ui.theme.OceanBlue
 import com.aldrenstudios.selfreign.util.TimeFormat
 
 /**
- * Dashboard: the focal screen. A circular progress ring (clean-time clock in the
- * center) is the hero; below it sit level/streak stat chips, an optional grace
- * banner, and the guarded relapse action.
+ * Dashboard: the focal screen. Everything is sized to fit the device without
+ * scrolling — the hero ring scales to the available height and the action buttons
+ * anchor to the bottom. Only the live clock/ring subtree reads the per-second
+ * clock, so the rest of the screen recomposes only when state actually changes.
  */
 @Composable
-fun DashboardScreen(viewModel: MainViewModel) {
+fun DashboardScreen(viewModel: MainViewModel, onOpenHistory: () -> Unit) {
     val state by viewModel.state.collectAsStateWithLifecycle()
-    val now by viewModel.now.collectAsStateWithLifecycle()
+    val level by viewModel.effectiveLevel.collectAsStateWithLifecycle()
+    val graceShielding by viewModel.graceShielding.collectAsStateWithLifecycle()
     val relapseResult by viewModel.relapseResult.collectAsStateWithLifecycle()
+
     var confirm by remember { mutableStateOf(false) }
     var openSheet by remember { mutableStateOf<DashboardSheet?>(null) }
     var showPanic by remember { mutableStateOf(false) }
-    // Index into the quote list; tapping the quote advances it.
-    var quoteIndex by remember { mutableIntStateOf((now / 86_400_000L).toInt()) }
+    var showGraceInfo by remember { mutableStateOf(false) }
+    var quoteIndex by remember { mutableIntStateOf((System.currentTimeMillis() / 86_400_000L).toInt()) }
 
-    val streak = state.streakMillis(now)
-    val level = state.effectiveLevel(now)
     val current = Levels.byNumber(level)
     val next = Levels.next(level)
 
-    val fraction = if (next != null) {
-        val span = (next.thresholdMillis - current.thresholdMillis).coerceAtLeast(1)
-        ((streak - current.thresholdMillis).toFloat() / span).coerceIn(0f, 1f)
-    } else 1f
+    BoxWithConstraints(modifier = Modifier.fillMaxSize()) {
+        // Responsive hero size: scales with screen height, clamped to sane bounds.
+        val ringSize = (maxHeight * 0.30f).coerceIn(150.dp, 280.dp)
+        val tight = maxHeight < 680.dp
 
-    Column(
-        modifier = Modifier
-            .fillMaxSize()
-            .verticalScroll(rememberScrollState())
-            .padding(horizontal = 24.dp),
-        horizontalAlignment = Alignment.CenterHorizontally
-    ) {
-        Spacer(Modifier.height(20.dp))
-
-        // Clickable motivational quote (tap to cycle to the next one)
-        QuoteCard(
-            quote = com.aldrenstudios.selfreign.util.Quotes.byIndex(quoteIndex),
-            onClick = {
-                viewModel.click()
-                quoteIndex++
-            }
-        )
-
-        Spacer(Modifier.height(24.dp))
-
-        // Hero: progress ring with the live clock inside (tap -> streak sheet)
-        ProgressRing(
-            progress = fraction,
-            brush = Brush.sweepGradient(listOf(OceanBlue, Accent, Lavender, OceanBlue)),
-            trackColor = MaterialTheme.colorScheme.surface,
-            glowColor = Color.Transparent,
-            modifier = Modifier.clip(CircleShape).clickable {
-                viewModel.click()
-                openSheet = DashboardSheet.STREAK
-            }
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(horizontal = 24.dp)
+                .padding(top = if (graceShielding) 44.dp else 12.dp, bottom = 14.dp),
+            horizontalAlignment = Alignment.CenterHorizontally
         ) {
-            ClockContent(streakMillis = streak)
-        }
-
-        Spacer(Modifier.height(20.dp))
-
-        // Progress caption
-        Text(
-            text = if (next != null) {
-                val remaining = (next.thresholdMillis - streak).coerceAtLeast(0)
-                "${TimeFormat.shortDuration(remaining)} ${stringResource(R.string.next_level_in)} \u00b7 ${next.title}"
-            } else stringResource(R.string.max_level_reached),
-            style = MaterialTheme.typography.bodyMedium,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-            textAlign = TextAlign.Center
-        )
-
-        Spacer(Modifier.height(24.dp))
-
-        // Stat chips
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.spacedBy(14.dp)
-        ) {
-            StatChip(
-                icon = Icons.Filled.EmojiEvents,
-                value = "Level $level",
-                label = current.title,
-                accent = Accent,
+            QuoteCard(
+                quote = com.aldrenstudios.selfreign.util.Quotes.byIndex(quoteIndex),
                 onClick = {
                     viewModel.click()
-                    openSheet = DashboardSheet.LEVEL
-                },
-                modifier = Modifier.weight(1f)
+                    quoteIndex++
+                }
             )
-            StatChip(
-                icon = Icons.Filled.Refresh,
-                value = state.relapseCount.toString(),
-                label = stringResource(R.string.relapse_count),
-                accent = OceanBlue,
+
+            Spacer(Modifier.weight(1f))
+
+            // Hero: live progress ring + clock + caption (the only per-second part).
+            LiveRing(
+                viewModel = viewModel,
+                state = state,
+                current = current,
+                next = next,
+                ringSize = ringSize,
+                onTap = {
+                    viewModel.click()
+                    openSheet = DashboardSheet.STREAK
+                }
+            )
+
+            Spacer(Modifier.weight(1f))
+
+            // Stat chips
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(14.dp)
+            ) {
+                StatChip(
+                    icon = Icons.Filled.EmojiEvents,
+                    value = "Level $level",
+                    label = current.title,
+                    accent = Accent,
+                    onClick = {
+                        viewModel.click()
+                        openSheet = DashboardSheet.LEVEL
+                    },
+                    modifier = Modifier.weight(1f)
+                )
+                StatChip(
+                    icon = Icons.Filled.Refresh,
+                    value = state.relapseCount.toString(),
+                    label = stringResource(R.string.relapse_count),
+                    accent = OceanBlue,
+                    onClick = {
+                        viewModel.click()
+                        onOpenHistory()
+                    },
+                    modifier = Modifier.weight(1f)
+                )
+            }
+
+            if (state.costPerDayCents > 0) {
+                Spacer(Modifier.height(12.dp))
+                MoneyChip(viewModel = viewModel, state = state, onClick = {
+                    viewModel.click()
+                    onOpenHistory()
+                })
+            }
+
+            Spacer(Modifier.weight(1f))
+
+            // Actions anchored near the bottom.
+            PanicButton(onClick = {
+                viewModel.click()
+                showPanic = true
+            })
+            Spacer(Modifier.height(if (tight) 8.dp else 12.dp))
+            RelapseButton(onClick = { confirm = true })
+        }
+
+        // Floating, tappable grace badge tucked into the top-end corner.
+        if (graceShielding) {
+            GraceBadge(
+                viewModel = viewModel,
+                state = state,
                 onClick = {
                     viewModel.click()
-                    openSheet = DashboardSheet.HISTORY
+                    showGraceInfo = true
                 },
-                modifier = Modifier.weight(1f)
+                modifier = Modifier
+                    .align(Alignment.TopEnd)
+                    .padding(top = 8.dp, end = 4.dp)
             )
         }
-
-        // Money reclaimed chip (only when a daily cost has been configured)
-        if (state.costPerDayCents > 0) {
-            Spacer(Modifier.height(14.dp))
-            StatChip(
-                icon = Icons.Filled.Savings,
-                value = formatMoney(state.moneySavedCents(now), state.currencySymbol),
-                label = stringResource(R.string.stat_saved),
-                accent = Lavender,
-                onClick = {
-                    viewModel.click()
-                    openSheet = DashboardSheet.HISTORY
-                },
-                modifier = Modifier.fillMaxWidth()
-            )
-        }
-
-        // Grace banner (only while shielding)
-        if (state.isGraceShielding(now)) {
-            Spacer(Modifier.height(16.dp))
-            GraceBanner(
-                remainingMillis = state.graceRemainingMillis(now),
-                protectedLevel = state.graceProtectedLevel
-            )
-        }
-
-        Spacer(Modifier.height(28.dp))
-
-        // Urge-surfing helper
-        PanicButton(onClick = {
-            viewModel.click()
-            showPanic = true
-        })
-
-        Spacer(Modifier.height(12.dp))
-
-        // Relapse action
-        RelapseButton(onClick = { confirm = true })
-
-        Spacer(Modifier.height(24.dp))
     }
 
-    // Detail bottom sheets for tappable stats.
+    if (showGraceInfo) {
+        GraceInfoDialog(
+            viewModel = viewModel,
+            state = state,
+            onDismiss = { showGraceInfo = false }
+        )
+    }
+
     openSheet?.let { which ->
         DashboardDetailSheet(
             sheet = which,
             state = state,
-            now = now,
+            now = viewModel.now.value,
             onDismiss = { openSheet = null }
         )
     }
@@ -235,6 +222,57 @@ fun DashboardScreen(viewModel: MainViewModel) {
     }
 }
 
+/**
+ * The live, per-second subtree: progress ring with the clock inside, plus the
+ * "to next level" caption. Isolated so only this recomposes each second.
+ */
+@Composable
+private fun LiveRing(
+    viewModel: MainViewModel,
+    state: RecoveryState,
+    current: Level,
+    next: Level?,
+    ringSize: Dp,
+    onTap: () -> Unit
+) {
+    val now by viewModel.now.collectAsStateWithLifecycle()
+    val streak = state.streakMillis(now)
+
+    val fraction = if (next != null) {
+        val span = (next.thresholdMillis - current.thresholdMillis).coerceAtLeast(1)
+        ((streak - current.thresholdMillis).toFloat() / span).coerceIn(0f, 1f)
+    } else 1f
+
+    ProgressRing(
+        progress = fraction,
+        brush = ringBrush,
+        trackColor = MaterialTheme.colorScheme.surface,
+        ringSize = ringSize,
+        strokeWidth = (ringSize.value * 0.06f).dp,
+        modifier = Modifier
+            .clip(CircleShape)
+            .clickable(onClick = onTap)
+    ) {
+        ClockContent(streakMillis = streak, ringSize = ringSize)
+    }
+
+    Spacer(Modifier.height(14.dp))
+
+    Text(
+        text = if (next != null) {
+            val remaining = (next.thresholdMillis - streak).coerceAtLeast(0)
+            "${TimeFormat.shortDuration(remaining)} ${stringResource(R.string.next_level_in)} \u00b7 ${next.title}"
+        } else stringResource(R.string.max_level_reached),
+        style = MaterialTheme.typography.bodyMedium,
+        color = MaterialTheme.colorScheme.onSurfaceVariant,
+        textAlign = TextAlign.Center
+    )
+}
+
+// Built once: the ring's sweep gradient never changes.
+private val ringBrush: Brush =
+    Brush.sweepGradient(listOf(OceanBlue, Accent, Lavender, OceanBlue))
+
 @Composable
 private fun QuoteCard(quote: String, onClick: () -> Unit) {
     Surface(
@@ -249,18 +287,20 @@ private fun QuoteCard(quote: String, onClick: () -> Unit) {
             color = MaterialTheme.colorScheme.onSurface,
             textAlign = TextAlign.Center,
             fontWeight = FontWeight.Medium,
-            modifier = Modifier.padding(horizontal = 20.dp, vertical = 16.dp)
+            modifier = Modifier.padding(horizontal = 20.dp, vertical = 14.dp)
         )
     }
 }
 
 @Composable
-private fun ClockContent(streakMillis: Long) {
+private fun ClockContent(streakMillis: Long, ringSize: Dp) {
     val p = TimeFormat.parts(streakMillis)
+    // Day count scales with the ring so it never overflows on small screens.
+    val daysFont = (ringSize.value * 0.22f).coerceIn(34f, 60f).sp
     Column(horizontalAlignment = Alignment.CenterHorizontally) {
         Text(
             text = p.days.toString(),
-            fontSize = 64.sp,
+            fontSize = daysFont,
             fontWeight = FontWeight.Bold,
             color = MaterialTheme.colorScheme.onBackground
         )
@@ -270,7 +310,7 @@ private fun ClockContent(streakMillis: Long) {
             color = MaterialTheme.colorScheme.primary,
             letterSpacing = 3.sp
         )
-        Spacer(Modifier.height(10.dp))
+        Spacer(Modifier.height(8.dp))
         Text(
             text = "%02d:%02d:%02d".format(p.hours, p.minutes, p.seconds),
             style = MaterialTheme.typography.titleMedium,
@@ -278,6 +318,19 @@ private fun ClockContent(streakMillis: Long) {
             letterSpacing = 1.sp
         )
     }
+}
+
+@Composable
+private fun MoneyChip(viewModel: MainViewModel, state: RecoveryState, onClick: () -> Unit) {
+    val now by viewModel.now.collectAsStateWithLifecycle()
+    StatChip(
+        icon = Icons.Filled.Savings,
+        value = formatMoney(state.moneySavedCents(now), state.currencySymbol),
+        label = stringResource(R.string.stat_saved),
+        accent = Lavender,
+        onClick = onClick,
+        modifier = Modifier.fillMaxWidth()
+    )
 }
 
 @Composable
@@ -296,7 +349,7 @@ private fun StatChip(
         color = MaterialTheme.colorScheme.surface
     ) {
         Row(
-            modifier = Modifier.padding(16.dp),
+            modifier = Modifier.padding(14.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
             Box(
@@ -314,7 +367,8 @@ private fun StatChip(
                     text = value,
                     style = MaterialTheme.typography.titleMedium,
                     color = MaterialTheme.colorScheme.onSurface,
-                    fontWeight = FontWeight.Bold
+                    fontWeight = FontWeight.Bold,
+                    maxLines = 1
                 )
                 Text(
                     text = label,
@@ -328,41 +382,60 @@ private fun StatChip(
 }
 
 @Composable
-private fun GraceBanner(remainingMillis: Long, protectedLevel: Int) {
+private fun GraceBadge(
+    viewModel: MainViewModel,
+    state: RecoveryState,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    val now by viewModel.now.collectAsStateWithLifecycle()
     Surface(
-        modifier = Modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(18.dp),
-        color = Lavender.copy(alpha = 0.10f),
-        border = androidx.compose.foundation.BorderStroke(1.dp, Lavender.copy(alpha = 0.3f))
+        onClick = onClick,
+        shape = RoundedCornerShape(50),
+        color = Lavender.copy(alpha = 0.16f),
+        border = androidx.compose.foundation.BorderStroke(1.dp, Lavender.copy(alpha = 0.35f)),
+        modifier = modifier
     ) {
         Row(
-            modifier = Modifier.padding(16.dp),
+            modifier = Modifier.padding(horizontal = 12.dp, vertical = 7.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
             Icon(
                 Icons.Filled.Shield,
-                contentDescription = null,
+                contentDescription = stringResource(R.string.grace_active),
                 tint = Lavender,
-                modifier = Modifier.size(22.dp)
+                modifier = Modifier.size(16.dp)
             )
-            Spacer(Modifier.width(12.dp))
-            Column {
-                Text(
-                    text = stringResource(R.string.grace_active),
-                    style = MaterialTheme.typography.titleSmall,
-                    color = Lavender,
-                    fontWeight = FontWeight.SemiBold
-                )
-                Text(
-                    text = "${TimeFormat.shortDuration(remainingMillis)} ${
-                        stringResource(R.string.grace_remaining, protectedLevel)
-                    }",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-            }
+            Spacer(Modifier.width(6.dp))
+            Text(
+                text = TimeFormat.shortDuration(state.graceRemainingMillis(now)),
+                style = MaterialTheme.typography.labelLarge,
+                color = Lavender,
+                fontWeight = FontWeight.SemiBold
+            )
         }
     }
+}
+
+@Composable
+private fun GraceInfoDialog(viewModel: MainViewModel, state: RecoveryState, onDismiss: () -> Unit) {
+    val now = viewModel.now.value
+    val protectedLevel = state.graceProtectedLevel
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        icon = { Icon(Icons.Filled.Shield, contentDescription = null, tint = Lavender) },
+        title = { Text(stringResource(R.string.grace_active)) },
+        text = {
+            Text(
+                "${TimeFormat.shortDuration(state.graceRemainingMillis(now))} ${
+                    stringResource(R.string.grace_remaining, protectedLevel)
+                }\n\n${stringResource(R.string.grace_info_body, protectedLevel)}"
+            )
+        },
+        confirmButton = {
+            TextButton(onClick = onDismiss) { Text(stringResource(R.string.got_it)) }
+        }
+    )
 }
 
 @Composable
@@ -373,7 +446,7 @@ private fun PanicButton(onClick: () -> Unit) {
         color = Accent.copy(alpha = 0.14f),
         modifier = Modifier
             .fillMaxWidth()
-            .height(58.dp)
+            .height(56.dp)
     ) {
         Row(
             modifier = Modifier.fillMaxSize(),
@@ -406,7 +479,7 @@ private fun RelapseButton(onClick: () -> Unit) {
         border = androidx.compose.foundation.BorderStroke(1.dp, MaterialTheme.colorScheme.error.copy(alpha = 0.4f)),
         modifier = Modifier
             .fillMaxWidth()
-            .height(58.dp)
+            .height(56.dp)
     ) {
         Row(
             modifier = Modifier.fillMaxSize(),

@@ -7,13 +7,9 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.Lock
@@ -34,20 +30,17 @@ import androidx.compose.ui.unit.dp
 import com.aldrenstudios.selfreign.R
 import com.aldrenstudios.selfreign.data.Levels
 import com.aldrenstudios.selfreign.data.RecoveryState
-import com.aldrenstudios.selfreign.data.RelapseLogEntry
-import com.aldrenstudios.selfreign.data.RelapseOutcome
 import com.aldrenstudios.selfreign.ui.theme.Accent
-import com.aldrenstudios.selfreign.ui.theme.Danger
 import com.aldrenstudios.selfreign.ui.theme.Lavender
 import com.aldrenstudios.selfreign.ui.theme.OceanBlue
 import com.aldrenstudios.selfreign.util.TimeFormat
 
-/** Identifies which detail sheet is open (tapped from the dashboard). */
-enum class DashboardSheet { STREAK, LEVEL, HISTORY }
+/** Identifies which detail sheet is open (tapped from the dashboard / insights). */
+enum class DashboardSheet { STREAK, LEVEL }
 
 /**
- * Hosts whichever detail bottom sheet is currently requested. Tapping the timer,
- * the level pill, or the relapses chip opens the corresponding sheet.
+ * Hosts whichever detail bottom sheet is currently requested. Tapping the timer
+ * opens the streak sheet; the level pill opens the level ladder.
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -71,7 +64,6 @@ fun DashboardDetailSheet(
             when (sheet) {
                 DashboardSheet.STREAK -> StreakSheet(state, now)
                 DashboardSheet.LEVEL -> LevelSheet(state, now)
-                DashboardSheet.HISTORY -> HistorySheet(state)
             }
         }
     }
@@ -169,66 +161,4 @@ private fun LevelSheet(state: RecoveryState, now: Long) {
             }
         }
     }
-}
-
-@Composable
-private fun HistorySheet(state: RecoveryState) {
-    SheetTitle(stringResource(R.string.sheet_history_title))
-    val entries = state.relapseLog.sortedByDescending { it.timestamp }
-    if (entries.isEmpty()) {
-        Text(
-            text = stringResource(R.string.history_empty),
-            style = MaterialTheme.typography.bodyLarge,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-            modifier = Modifier.padding(vertical = 24.dp)
-        )
-    } else {
-        LazyColumn(
-            modifier = Modifier.heightIn(max = 420.dp),
-            verticalArrangement = Arrangement.spacedBy(10.dp)
-        ) {
-            items(entries) { entry -> HistoryItem(entry) }
-        }
-    }
-}
-
-@Composable
-private fun HistoryItem(entry: RelapseLogEntry) {
-    val (label, accent) = outcomeLabel(entry.outcome)
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .clip(RoundedCornerShape(12.dp))
-            .background(MaterialTheme.colorScheme.onSurface.copy(alpha = 0.04f))
-            .padding(14.dp),
-        verticalAlignment = Alignment.CenterVertically
-    ) {
-        Box(
-            modifier = Modifier
-                .size(8.dp)
-                .clip(CircleShape)
-                .background(accent)
-        )
-        Spacer(Modifier.size(12.dp))
-        Text(
-            text = TimeFormat.dateTime(entry.timestamp),
-            style = MaterialTheme.typography.bodyMedium,
-            color = MaterialTheme.colorScheme.onSurface,
-            modifier = Modifier.weight(1f)
-        )
-        Text(
-            text = label,
-            style = MaterialTheme.typography.labelMedium,
-            color = accent,
-            fontWeight = FontWeight.SemiBold
-        )
-    }
-}
-
-/** Maps a stored outcome name to a friendly label + accent color. */
-@Composable
-private fun outcomeLabel(outcome: String): Pair<String, Color> = when (outcome) {
-    RelapseOutcome.FIRST_FORGIVENESS.name -> stringResource(R.string.outcome_first_forgiveness) to Accent
-    RelapseOutcome.GRACE_STARTED.name -> stringResource(R.string.outcome_grace_started) to Lavender
-    else -> stringResource(R.string.outcome_hard_lock) to Danger
 }
