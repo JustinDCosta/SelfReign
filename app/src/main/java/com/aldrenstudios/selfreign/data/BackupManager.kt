@@ -42,9 +42,6 @@ object BackupManager {
             put("graceProtectedLevel", state.graceProtectedLevel)
             put("onboardingComplete", state.onboardingComplete)
             put("selectedWallpaperId", state.selectedWallpaperId)
-            put("selectedMusicId", state.selectedMusicId ?: JSONObject.NULL)
-            put("musicEnabled", state.musicEnabled)
-            put("soundsEnabled", state.soundsEnabled)
             put("hapticsEnabled", state.hapticsEnabled)
             put("levelThresholds", JSONArray(state.levelThresholds))
             put("costPerDayCents", state.costPerDayCents)
@@ -103,10 +100,6 @@ object BackupManager {
             val wallpaperId = s.optString("selectedWallpaperId", "wp_black")
                 .let { if (StoreCatalog.byId(it) != null) it else "wp_black" }
 
-            // Music id is nullable and, if present, must exist in the catalog.
-            val musicId = if (s.isNull("selectedMusicId")) null
-            else s.optString("selectedMusicId", "").takeIf { it.isNotBlank() && StoreCatalog.byId(it) != null }
-
             val state = RecoveryState(
                 streakStartTimestamp = streakStart,
                 relapseCount = relapseCount,
@@ -119,10 +112,7 @@ object BackupManager {
                 graceProtectedLevel = graceLevel,
                 onboardingComplete = s.getBoolean("onboardingComplete"),
                 selectedWallpaperId = wallpaperId,
-                selectedMusicId = musicId,
-                musicEnabled = s.getBoolean("musicEnabled"),
-                soundsEnabled = s.getBoolean("soundsEnabled"),
-                hapticsEnabled = s.getBoolean("hapticsEnabled"),
+                hapticsEnabled = s.optBoolean("hapticsEnabled", false),
                 levelThresholds = Levels.sanitize(
                     s.optJSONArray("levelThresholds")?.let { arr ->
                         (0 until arr.length()).map { arr.optInt(it) }

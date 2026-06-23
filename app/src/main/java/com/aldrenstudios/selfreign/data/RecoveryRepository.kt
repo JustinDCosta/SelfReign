@@ -52,12 +52,6 @@ class RecoveryRepository(private val store: RecoveryStateStore) {
 
     fun selectWallpaper(id: String) = update(_state.value.copy(selectedWallpaperId = id))
 
-    fun selectMusic(id: String?) = update(_state.value.copy(selectedMusicId = id))
-
-    fun setMusicEnabled(enabled: Boolean) = update(_state.value.copy(musicEnabled = enabled))
-
-    fun setSoundsEnabled(enabled: Boolean) = update(_state.value.copy(soundsEnabled = enabled))
-
     fun setHapticsEnabled(enabled: Boolean) = update(_state.value.copy(hapticsEnabled = enabled))
 
     /** Updates the custom milestone day-thresholds (sanitised) and reconfigures the ladder. */

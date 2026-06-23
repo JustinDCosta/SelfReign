@@ -47,10 +47,7 @@ class RecoveryStateStore(context: Context) {
             graceProtectedLevel = getInt(K_GRACE_LEVEL, 0),
             onboardingComplete = getBoolean(K_ONBOARDING, false),
             selectedWallpaperId = getString(K_WALLPAPER, "wp_black") ?: "wp_black",
-            selectedMusicId = getString(K_MUSIC, null),
-            musicEnabled = getBoolean(K_MUSIC_ON, false),
-            soundsEnabled = getBoolean(K_SOUNDS_ON, true),
-            hapticsEnabled = getBoolean(K_HAPTICS_ON, true),
+            hapticsEnabled = getBoolean(K_HAPTICS_ON, false),
             levelThresholds = Levels.sanitize(
                 getString(K_THRESHOLDS, null)
                     ?.split(",")
@@ -78,9 +75,6 @@ class RecoveryStateStore(context: Context) {
             putInt(K_GRACE_LEVEL, state.graceProtectedLevel)
             putBoolean(K_ONBOARDING, state.onboardingComplete)
             putString(K_WALLPAPER, state.selectedWallpaperId)
-            putString(K_MUSIC, state.selectedMusicId)
-            putBoolean(K_MUSIC_ON, state.musicEnabled)
-            putBoolean(K_SOUNDS_ON, state.soundsEnabled)
             putBoolean(K_HAPTICS_ON, state.hapticsEnabled)
             putString(K_THRESHOLDS, state.levelThresholds.joinToString(","))
             putInt(K_COST_PER_DAY, state.costPerDayCents)
@@ -103,9 +97,6 @@ class RecoveryStateStore(context: Context) {
         const val K_GRACE_LEVEL = "grace_level"
         const val K_ONBOARDING = "onboarding_complete"
         const val K_WALLPAPER = "wallpaper_id"
-        const val K_MUSIC = "music_id"
-        const val K_MUSIC_ON = "music_enabled"
-        const val K_SOUNDS_ON = "sounds_enabled"
         const val K_HAPTICS_ON = "haptics_enabled"
         const val K_THRESHOLDS = "level_thresholds"
         const val K_COST_PER_DAY = "cost_per_day_cents"

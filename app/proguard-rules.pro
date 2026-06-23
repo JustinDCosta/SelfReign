@@ -5,10 +5,6 @@
 # Keep Compose runtime metadata so composition/recomposition reflection works.
 -keep class androidx.compose.** { *; }
 
-# --- Ambient audio (MediaSession compat) ---
-# The media service uses the support-media-compat session classes via reflection.
--keep class android.support.v4.media.** { *; }
-
 # --- Glance app widget ---
 # Glance + its RemoteViews translation layer rely on reflection over these classes.
 -keep class androidx.glance.** { *; }

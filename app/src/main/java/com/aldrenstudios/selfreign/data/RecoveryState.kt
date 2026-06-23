@@ -91,10 +91,7 @@ data class RecoveryState(
 
     // --- Customization (store selections + feedback toggles) ---
     val selectedWallpaperId: String = "wp_black",
-    val selectedMusicId: String? = null,
-    val musicEnabled: Boolean = false,
-    val soundsEnabled: Boolean = true,
-    val hapticsEnabled: Boolean = true,
+    val hapticsEnabled: Boolean = false,
 
     // --- Customizable milestones (days per level 0..5) ---
     val levelThresholds: List<Int> = Levels.defaultThresholds,
