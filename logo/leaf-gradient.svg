@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- SelfReign logo option 3: Gradient - soft top-to-bottom green gradient leaf. -->
+<svg xmlns="http://www.w3.org/2000/svg" width="512" height="512" viewBox="0 0 512 512">
+  <defs>
+    <linearGradient id="leaf" x1="256" y1="128" x2="256" y2="384" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#63E6AD"/>
+      <stop offset="1" stop-color="#2BA37A"/>
+    </linearGradient>
+  </defs>
+  <path fill="#000000"
+        d="M112,0 L400,0 Q512,0 512,112 L512,400 Q512,512 400,512 L112,512 Q0,512 0,400 L0,112 Q0,0 112,0 Z"/>
+  <path fill="url(#leaf)"
+        d="M256,128 C348,196 348,316 256,384 C164,316 164,196 256,128 Z"/>
+  <path stroke="#1E6F58" stroke-width="11" stroke-linecap="round" fill="none" opacity="0.9"
+        d="M256,150 L256,362"/>
+</svg>

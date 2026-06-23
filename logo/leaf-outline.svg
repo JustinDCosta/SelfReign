@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- SelfReign logo option 4: Outline - minimalist stroked leaf, no fill. -->
+<svg xmlns="http://www.w3.org/2000/svg" width="512" height="512" viewBox="0 0 512 512">
+  <path fill="#000000"
+        d="M112,0 L400,0 Q512,0 512,112 L512,400 Q512,512 400,512 L112,512 Q0,512 0,400 L0,112 Q0,0 112,0 Z"/>
+  <g stroke="#4CC9A0" stroke-width="16" stroke-linejoin="round" stroke-linecap="round" fill="none">
+    <path d="M256,128 C348,196 348,316 256,384 C164,316 164,196 256,128 Z"/>
+    <path d="M256,156 L256,356"/>
+  </g>
+</svg>

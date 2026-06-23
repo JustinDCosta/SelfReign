@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- SelfReign logo option 6: Sprout - two new-growth leaves rising from a stem. -->
+<svg xmlns="http://www.w3.org/2000/svg" width="512" height="512" viewBox="0 0 512 512">
+  <path fill="#000000"
+        d="M112,0 L400,0 Q512,0 512,112 L512,400 Q512,512 400,512 L112,512 Q0,512 0,400 L0,112 Q0,0 112,0 Z"/>
+  <!-- stem -->
+  <path stroke="#1E6F58" stroke-width="14" stroke-linecap="round" fill="none"
+        d="M256,392 L256,236"/>
+  <!-- left leaf -->
+  <path fill="#4CC9A0" transform="rotate(-34 256 268)"
+        d="M256,268 C300,238 300,180 256,150 C212,180 212,238 256,268 Z"/>
+  <!-- right leaf -->
+  <path fill="#3FB68F" transform="rotate(34 256 268)"
+        d="M256,268 C300,238 300,180 256,150 C212,180 212,238 256,268 Z"/>
+</svg>

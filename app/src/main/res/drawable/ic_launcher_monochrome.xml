@@ -1,8 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <!--
-  Adaptive-icon FOREGROUND: the "sprout" mark - two new-growth leaves rising from a
-  stem, sized to sit inside the central safe zone of the 108dp canvas. The black
-  comes from the adaptive-icon background layer (@color/ic_launcher_background).
+  Monochrome adaptive-icon layer (Android 13+ themed icons): the sprout as a single
+  flat silhouette; the system recolors it to match the user's wallpaper theme.
 -->
 <vector xmlns:android="http://schemas.android.com/apk/res/android"
     android:width="108dp"
@@ -10,24 +9,19 @@
     android:viewportWidth="108"
     android:viewportHeight="108">
 
-    <!-- Stem (drawn first so the leaves overlap its top) -->
     <path
-        android:strokeColor="#FF1E6F58"
+        android:strokeColor="#FFFFFFFF"
         android:strokeWidth="3.4"
         android:strokeLineCap="round"
         android:pathData="M54,84 L54,52" />
-
-    <!-- Left leaf -->
     <group android:pivotX="54" android:pivotY="56" android:rotation="-32">
         <path
-            android:fillColor="#FF4CC9A0"
+            android:fillColor="#FFFFFFFF"
             android:pathData="M54,56 C64,49 64,37 54,30 C44,37 44,49 54,56 Z" />
     </group>
-
-    <!-- Right leaf (slightly deeper green for a touch of depth) -->
     <group android:pivotX="54" android:pivotY="56" android:rotation="32">
         <path
-            android:fillColor="#FF3FB68F"
+            android:fillColor="#FFFFFFFF"
             android:pathData="M54,56 C64,49 64,37 54,30 C44,37 44,49 54,56 Z" />
     </group>
 </vector>

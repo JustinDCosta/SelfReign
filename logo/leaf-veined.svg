@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- SelfReign logo option 2: Veined - solid leaf with midrib and side veins. -->
+<svg xmlns="http://www.w3.org/2000/svg" width="512" height="512" viewBox="0 0 512 512">
+  <path fill="#000000"
+        d="M112,0 L400,0 Q512,0 512,112 L512,400 Q512,512 400,512 L112,512 Q0,512 0,400 L0,112 Q0,0 112,0 Z"/>
+  <path fill="#4CC9A0"
+        d="M256,128 C348,196 348,316 256,384 C164,316 164,196 256,128 Z"/>
+  <g stroke="#1E6F58" stroke-width="11" stroke-linecap="round" fill="none">
+    <path d="M256,150 L256,362"/>
+    <path d="M256,212 L206,182"/>
+    <path d="M256,212 L306,182"/>
+    <path d="M256,262 L214,238"/>
+    <path d="M256,262 L298,238"/>
+    <path d="M256,312 L224,294"/>
+    <path d="M256,312 L288,294"/>
+  </g>
+</svg>
