@@ -43,12 +43,11 @@ class MainActivity : FragmentActivity() {
             val settingsViewModel: SettingsViewModel = viewModel(
                 factory = SettingsViewModel.Factory(app.settingsRepository, app)
             )
-            val settings by settingsViewModel.settings.collectAsStateWithLifecycle()
             val recovery by mainViewModel.state.collectAsStateWithLifecycle()
             val unlocked by mainViewModel.unlocked.collectAsStateWithLifecycle()
             val celebrationLevel by mainViewModel.celebrationLevel.collectAsStateWithLifecycle()
 
-            SelfReignTheme(fontSize = settings.fontSize) {
+            SelfReignTheme {
                 Box(
                     modifier = Modifier
                         .fillMaxSize()
@@ -73,7 +72,7 @@ class MainActivity : FragmentActivity() {
                         }
                         // 3. Main app.
                         else -> {
-                            AppNavigation(app, mainViewModel)
+                            AppNavigation(settingsViewModel, mainViewModel)
                         }
                     }
 

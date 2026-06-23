@@ -1,21 +1,22 @@
 package com.aldrenstudios.selfreign.ui.theme
 
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Typography
 import androidx.compose.material3.darkColorScheme
 import androidx.compose.runtime.Composable
-import com.aldrenstudios.selfreign.data.FontSizeOption
 
 /**
  * Applies the calm, AMOLED-first dark theme to the whole app. There is only ever a
  * dark scheme by design (battery-conscious, mindfulness brief). The actual screen
- * background is painted from the user's selected store wallpaper (see MainActivity),
- * so this theme provides the Material color roles and the font scale.
+ * background is painted from the user's selected store wallpaper (see MainActivity).
+ *
+ * Text uses a single typography in `sp`, so it automatically respects the device's
+ * own font-size / accessibility setting — there is no in-app font option.
  */
+private val AppTypography = Typography()
+
 @Composable
-fun SelfReignTheme(
-    fontSize: FontSizeOption,
-    content: @Composable () -> Unit
-) {
+fun SelfReignTheme(content: @Composable () -> Unit) {
     val colorScheme = darkColorScheme(
         primary = Accent,
         onPrimary = AmoledBackground,
@@ -33,13 +34,7 @@ fun SelfReignTheme(
 
     MaterialTheme(
         colorScheme = colorScheme,
-        typography = buildTypography(fontSize.scale),
+        typography = AppTypography,
         content = content
     )
-}
-
-/** Convenience used only by @Preview composables. */
-@Composable
-fun PreviewTheme(content: @Composable () -> Unit) {
-    SelfReignTheme(FontSizeOption.MEDIUM, content)
 }

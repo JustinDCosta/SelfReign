@@ -4,7 +4,6 @@ import android.content.Context
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
-import com.aldrenstudios.selfreign.data.FontSizeOption
 import com.aldrenstudios.selfreign.data.SettingsRepository
 import com.aldrenstudios.selfreign.data.UserSettings
 import com.aldrenstudios.selfreign.util.ReminderWorker
@@ -13,7 +12,7 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 
-/** Reads and updates lightweight appearance/notification preferences. */
+/** Reads and updates lightweight notification preferences. */
 class SettingsViewModel(
     private val repo: SettingsRepository,
     private val appContext: Context
@@ -26,10 +25,8 @@ class SettingsViewModel(
             UserSettings()
         )
 
-    fun setFontSize(option: FontSizeOption) = viewModelScope.launch { repo.setFontSize(option) }
-
     fun setReminders(enabled: Boolean) = viewModelScope.launch {
-        repo.setRemindersEnabled(enabled)
+        runCatching { repo.setRemindersEnabled(enabled) }
         // Translate the preference into an actual scheduled (or cancelled) job.
         if (enabled) ReminderWorker.schedule(appContext) else ReminderWorker.cancel(appContext)
     }
